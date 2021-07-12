@@ -1,16 +1,66 @@
 package main
 
+type keystate struct {
+    test uint8
+}
+
+// -------------------
+// Keyboard Ringbuffer
+// -------------------
+
+type KeyboardRing struct {
+    Ring GenericRing
+    Buffer [32]keystate
+}
+
+func (r *KeyboardRing) Init() {
+    r.Ring.Cap = r.Cap()
+}
+
+func (r *KeyboardRing) Len() int {
+    return r.Ring.Len()
+}
+
+func (r *KeyboardRing) Cap() int {
+    return len(r.Buffer)
+}
+
+func (r *KeyboardRing) Push(s keystate){
+    // Not thread safe
+    if i := r.Ring.Push(); i != -1 {
+        r.Buffer[i] = s
+    }
+}
+
+func (r *KeyboardRing) Pop() *keystate {
+    // Not thread safe
+    if i := r.Ring.Pop(); i != -1 {
+        return &r.Buffer[i]
+    }
+    return nil
+}
+
+// End keyboard ring buffer
+
+const (
+    keyboardInputPort = 0x60
+)
+
+
+var buffer KeyboardRing = KeyboardRing {
+    Ring: GenericRing {},
+}
+
+var tempKeystate keystate = keystate{}
+
 func handleKeyboard(){
-    keycode := Inb(0x60) // TODO: constant Where to get this?
-    // Better would be to create a buffer and then a consumer for the key codes to print...
-    if(keycode & 0x80 == 0x80) {return}
-    text_mode_print_char(keycode)
-    text_mode_print_char(0x20)
-    text_mode_print_hex(keycode)
-    text_mode_print_char(0x0a)
+    keycode := Inb(keyboardInputPort) // TODO: constant Where to get this?
+    tempKeystate.test = keycode
+    buffer.Push(tempKeystate)
 }
 
 func InitKeyboard(){
-    EnableIRQ(1)
     RegisterPICHandler(1, handleKeyboard)
+    EnableIRQ(1)
+    buffer.Init()
 }

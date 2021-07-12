@@ -6,7 +6,7 @@ TEXT ·Outb(SB),NOSPLIT,$0
     OUTB
     RET
 
-TEXT ·Inb(SB),NOSPLIT,$0-9
+TEXT ·Inb(SB),NOSPLIT,$0-5
     MOVW port+0(FP), DX
     INB
     MOVB AX, ret+4(FP)

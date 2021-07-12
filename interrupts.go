@@ -21,7 +21,7 @@ type IdtDescriptor struct {
 type InterruptInfo struct {
      InterruptNumber uint32
      ExceptionCode uint32
-     RIP uint32
+     EIP uint32
      CS uint32
      EFLAGS uint32
      ESP uint32
@@ -45,12 +45,13 @@ type RegisterState struct {
      EAX uint32
 }
 
-
-var idtTable = [256]IdtEntry{}
-
-var idtDescriptor IdtDescriptor = IdtDescriptor{}
-
-var handlers [256]func(intNum uint8)
+var (
+    idtTable = [256]IdtEntry{}
+    idtDescriptor IdtDescriptor = IdtDescriptor{}
+    handlers [256]func(info *InterruptInfo, regs *RegisterState)
+    infoEscapePreventer InterruptInfo
+    regsEscapePreventer RegisterState
+)
 
 func isrVector()
 
@@ -103,16 +104,29 @@ func do_isr(regs RegisterState, info InterruptInfo){
     //text_mode_print_char(0x20)
     //text_mode_print_hex(uint8(regs.GS))
     //text_mode_print_char(0x20)
+    infoEscapePreventer = info
+    regsEscapePreventer = regs
 
-    handlers[info.InterruptNumber](uint8(info.InterruptNumber))
+    handlers[info.InterruptNumber](&infoEscapePreventer, &regsEscapePreventer)
 }
 
-func SetInterruptHandler(irq uint8, f func (intNum uint8)){
+func SetInterruptHandler(irq uint8, f func (info *InterruptInfo, regs *RegisterState)){
     handlers[irq] = f
 }
 
-func defaultHandler(intNum uint8){
-    text_mode_print("Default handler")
+func defaultHandler(info *InterruptInfo, regs *RegisterState){
+    text_mode_print_char(0xa)
+    text_mode_print_error("Unhandled interrupt! Disabling Interrupt and halting!")
+    text_mode_print("Interrupt number: ")
+    text_mode_print_hex(uint8(info.InterruptNumber))
+    text_mode_print_char(0xa)
+    text_mode_print("Exception code: ")
+    text_mode_print_hex32(info.ExceptionCode)
+    text_mode_print_char(0xa)
+    text_mode_print("EIP: ")
+    text_mode_print_hex32(info.EIP)
+    DisableInterrupts()
+    Hlt()
 }
 
 func InitInterrupts(){
@@ -128,7 +142,6 @@ func InitInterrupts(){
         idtTable[i].offsetHigh = high
         SetInterruptHandler(uint8(i), defaultHandler)
     }
-    text_mode_print("Hi from interrupts")
     idtDescriptor.IdtSize = uint16(uintptr(len(idtTable))*unsafe.Sizeof(idtTable[0]))-1
     idtAddr := uint32(uintptr(unsafe.Pointer(&idtTable)))
     idtDescriptor.IdtAddressLow = uint16(idtAddr)

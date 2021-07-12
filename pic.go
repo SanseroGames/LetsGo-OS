@@ -20,8 +20,8 @@ const (
 
 var picHandlers [16]func()
 
-func PICInterruptHandler(intNum uint8){
-    irq := intNum - PIC1Offset
+func PICInterruptHandler(info *InterruptInfo, regs *RegisterState){
+    irq := info.InterruptNumber - uint32(PIC1Offset)
     if(irq == 7){
         Outb(PIC1Port, PIC_ReadISR)
         res := Inb(PIC1Port)
@@ -97,10 +97,6 @@ func EnableIRQ(irq uint8){
         irq -= 8
     }
     value := Inb(port) &^ (1 << irq)
-    text_mode_print("Enabling")
-    text_mode_print_char(0x30+irq)
-    text_mode_print_char(0xa)
-    debug_print_flags(value)
     Outb(port, value)
 }
 
