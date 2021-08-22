@@ -116,7 +116,7 @@ func SetInterruptHandler(irq uint8, f func (info *InterruptInfo, regs *RegisterS
 
 func defaultHandler(info *InterruptInfo, regs *RegisterState){
     text_mode_print_char(0xa)
-    text_mode_print_error("Unhandled interrupt! Disabling Interrupt and halting!")
+    text_mode_print_errorln("Unhandled interrupt! Disabling Interrupt and halting!")
     text_mode_print("Interrupt number: ")
     text_mode_print_hex(uint8(info.InterruptNumber))
     text_mode_print_char(0xa)

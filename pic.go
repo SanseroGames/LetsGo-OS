@@ -50,7 +50,7 @@ func PICInterruptHandler(info *InterruptInfo, regs *RegisterState){
 }
 
 func defaultPicHandler(){
-
+    text_mode_print_errorln("Unhandled IRQ")
 }
 
 func InitPIC(){
