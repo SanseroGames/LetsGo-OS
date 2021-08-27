@@ -1,7 +1,7 @@
 package main
 
-type keystate struct {
-    test uint8
+type Keystate struct {
+    Keycode uint8
 }
 
 // -------------------
@@ -10,7 +10,7 @@ type keystate struct {
 
 type KeyboardRing struct {
     Ring GenericRing
-    Buffer [32]keystate
+    Buffer [32]Keystate
 }
 
 func (r *KeyboardRing) Init() {
@@ -25,14 +25,14 @@ func (r *KeyboardRing) Cap() int {
     return len(r.Buffer)
 }
 
-func (r *KeyboardRing) Push(s keystate){
+func (r *KeyboardRing) Push(s Keystate){
     // Not thread safe
     if i := r.Ring.Push(); i != -1 {
         r.Buffer[i] = s
     }
 }
 
-func (r *KeyboardRing) Pop() *keystate {
+func (r *KeyboardRing) Pop() *Keystate {
     // Not thread safe
     if i := r.Ring.Pop(); i != -1 {
         return &r.Buffer[i]
@@ -51,11 +51,11 @@ var buffer KeyboardRing = KeyboardRing {
     Ring: GenericRing {}, // Important to prevent initialization at runtime
 }
 
-var tempKeystate keystate = keystate{}
+var tempKeystate Keystate = Keystate{}
 
 func handleKeyboard(){
     keycode := Inb(keyboardInputPort) // TODO: constant Where to get this?
-    tempKeystate.test = keycode
+    tempKeystate.Keycode = keycode
     buffer.Push(tempKeystate)
 }
 

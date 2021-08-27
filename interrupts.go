@@ -45,12 +45,18 @@ type RegisterState struct {
      EAX uint32
 }
 
+const (
+    INTERRUPT_GATE = 0xE
+)
+
 var (
     idtTable = [256]IdtEntry{}
     idtDescriptor IdtDescriptor = IdtDescriptor{}
     handlers [256]func(info *InterruptInfo, regs *RegisterState)
     infoEscapePreventer InterruptInfo
     regsEscapePreventer RegisterState
+    currentTask MemSpace
+
 )
 
 func isrVector()
@@ -60,9 +66,15 @@ func isrEntryList()
 
 func installIDT(descriptor *IdtDescriptor)
 
+func getIDT() *IdtDescriptor
+
 func EnableInterrupts()
 func DisableInterrupts()
 
+func setDS(ds_segment uint32)
+func setGS(gs_segment uint32)
+
+//go:nosplit
 func do_isr(regs RegisterState, info InterruptInfo){
     //text_mode_print("Interrupt")
     //text_mode_print_hex(uint8(info.SS))
@@ -104,14 +116,25 @@ func do_isr(regs RegisterState, info InterruptInfo){
     //text_mode_print_char(0x20)
     //text_mode_print_hex(uint8(regs.GS))
     //text_mode_print_char(0x20)
+    setGS(KGS_SELECTOR)
+    setDS(KDS_SELECTOR)
+
+    switchPageDir(kernelMemSpace.PageDirectory)
+
     infoEscapePreventer = info
     regsEscapePreventer = regs
 
     handlers[info.InterruptNumber](&infoEscapePreventer, &regsEscapePreventer)
+    info = infoEscapePreventer
+    regs = regsEscapePreventer
+    switchPageDir(currentTask.PageDirectory)
 }
 
-func SetInterruptHandler(irq uint8, f func (info *InterruptInfo, regs *RegisterState)){
+func SetInterruptHandler(irq uint8, f func (info *InterruptInfo, regs *RegisterState), selector int, priv uint8){
     handlers[irq] = f
+    idtTable[irq].selector = uint16(selector)
+    idtTable[irq].flags = uint16(priv | 0xE | PRESENT)<<8
+
 }
 
 func defaultHandler(info *InterruptInfo, regs *RegisterState){
@@ -137,10 +160,8 @@ func InitInterrupts(){
         low := uint16(isrAddr)
         high := uint16(uint32(isrAddr)>>16)
         idtTable[i].offsetLow = low
-        idtTable[i].selector = 0x08
-        idtTable[i].flags = 0x8E00
         idtTable[i].offsetHigh = high
-        SetInterruptHandler(uint8(i), defaultHandler)
+        SetInterruptHandler(uint8(i), defaultHandler, KCS_SELECTOR, PRIV_KERNEL)
     }
     idtDescriptor.IdtSize = uint16(uintptr(len(idtTable))*unsafe.Sizeof(idtTable[0]))-1
     idtAddr := uint32(uintptr(unsafe.Pointer(&idtTable)))
@@ -149,4 +170,15 @@ func InitInterrupts(){
     installIDT(&idtDescriptor)
 }
 
-
+func printIdt(idt []IdtEntry){
+    for _,n := range idt {
+        text_mode_print_hex16(n.offsetLow)
+        text_mode_print(" ")
+        text_mode_print_hex16(n.selector)
+        text_mode_print(" ")
+        text_mode_print_hex16(n.flags)
+        text_mode_print(" ")
+        text_mode_print_hex16(n.offsetHigh)
+        text_mode_println("")
+    }
+}

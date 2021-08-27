@@ -1,4 +1,5 @@
 BUILD_DIR := build
+USR_BUILD_DIR := $(BUILD_DIR)/usr
 
 LD := ld
 AS := nasm
@@ -14,12 +15,14 @@ AS_FLAGS := -g -f elf32 -F dwarf -I arch/$(ARCH)/asm/
 kernel_target :=$(BUILD_DIR)/kernel-$(ARCH).bin
 iso_target := $(BUILD_DIR)/kernel-$(ARCH).iso
 
-disk_image := file.img
+disk_image := disk/file.img
 
 asm_src_files := $(wildcard arch/$(ARCH)/asm/*.s)
 asm_obj_files := $(patsubst arch/$(ARCH)/asm/%.s, $(BUILD_DIR)/arch/$(ARCH)/asm/%.o, $(asm_src_files))
 
-.PHONY: kernel iso
+usr_apps := $(wildcard usr/*).o
+
+.PHONY: kernel usr iso
 
 kernel: $(kernel_target)
 
@@ -27,6 +30,11 @@ $(kernel_target): $(asm_obj_files) go.o
 	@echo "[$(LD)] linking kernel-$(ARCH).bin"
 	@$(LD) $(LD_FLAGS) -o $(kernel_target) $(asm_obj_files) $(BUILD_DIR)/go.o
 
+$(usr_apps):
+	@echo "[go] Building $@"
+	@GOARCH=$(GOARCH) GOOS=$(GOOS) go build -o $(USR_BUILD_DIR)/$(notdir $@) $(basename $@)/main.go
+
+usr: $(usr_apps)
 
 go.o:
 	@mkdir -p $(BUILD_DIR)
@@ -49,12 +57,14 @@ $(BUILD_DIR)/arch/$(ARCH)/asm/%.o: arch/$(ARCH)/asm/%.s
 
 iso: $(iso_target)
 
-$(iso_target): $(kernel_target)
+$(iso_target): $(kernel_target) $(usr_apps)
 	@echo "[grub] building ISO kernel-$(ARCH).iso"
 
 	@mkdir -p $(BUILD_DIR)/isofiles/boot/grub
+	@mkdir -p $(BUILD_DIR)/isofiles/usr/
 	@cp $(kernel_target) $(BUILD_DIR)/isofiles/boot/kernel.bin
 	@cp arch/$(ARCH)/script/grub.cfg $(BUILD_DIR)/isofiles/boot/grub
+	@cp $(wildcard $(USR_BUILD_DIR)/*.o) $(BUILD_DIR)/isofiles/usr/
 	@grub-mkrescue -o $(iso_target) $(BUILD_DIR)/isofiles 2>&1 | sed -e "s/^/  | /g"
 	@rm -r $(BUILD_DIR)/isofiles
 

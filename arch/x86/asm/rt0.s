@@ -27,6 +27,8 @@ G_STACKGUARD0 equ 0x8
 
 err_unsupported_bootloader db '[rt0] kernel not loaded by multiboot-compliant bootloader', 0
 
+tmp_multiboot_info dw 0
+
 ;------------------------------------------------------------------------------
 ; Kernel arch-specific entry point
 ;
@@ -44,6 +46,8 @@ global _rt0_entry
 _rt0_entry:
 	cmp eax, MULTIBOOT_MAGIC
 	jne unsupported_bootloader
+
+    mov [tmp_multiboot_info], ebx
 
 	; Initalize our stack by pointing ESP to the BSS-allocated stack. In x86,
 	; stack grows downwards so we need to point ESP to stack_top
@@ -64,6 +68,9 @@ _rt0_entry:
 	mov dword [g0_ptr], runtime.g0
 
 	; jump into the go code
+    push esp
+    mov ebx, [tmp_multiboot_info]
+    push ebx
 	extern main.main
 	call main.main
 

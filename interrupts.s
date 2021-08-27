@@ -1,9 +1,26 @@
 #include "textflag.h"
 
+TEXT ·setDS(SB),NOSPLIT,$0
+    MOVL ·ds_segment+0(FP), AX
+    MOVW AX, DS
+    RET
+
+TEXT ·setGS(SB),NOSPLIT,$0
+    MOVL ·gs_segment+0(FP), AX
+    MOVW AX, GS
+    RET
+
+
 TEXT ·installIDT(SB),NOSPLIT,$0
     MOVL ·descriptor(FP), AX
     LIDT (AX)
 	RET
+
+TEXT ·getIDT(SB),NOSPLIT,$0
+    SIDT (AX)
+    MOVL AX, ret+0(FP)
+    RET
+
 
 TEXT ·isrVector(SB), NOSPLIT,$0
     //"Pushes all general purpose registers onto the stack in the following order: (E)AX, (E)CX, (E)DX, (E)BX, (E)SP, (E)BP, (E)SI, (E)DI. The value of SP is the value before the actual push of SP."
