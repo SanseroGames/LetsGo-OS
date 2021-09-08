@@ -35,6 +35,7 @@ type page struct {
 type MemSpace struct {
     PageDirectory *PageTable
     VmTop uintptr
+    Brk uintptr
 }
 
 func enablePaging()
@@ -48,6 +49,9 @@ func getPageFaultAddr() uint32
 func pageFaultHandler(info *InterruptInfo, regs *RegisterState) {
     text_mode_print_char(0xa)
     text_mode_print_errorln("Page Fault! Disabling Interrupt and halting!")
+    text_mode_print_char(0xa)
+    text_mode_print("Thread ID:")
+    text_mode_print_hex(uint8(currentDomain.CurThread.tid))
     text_mode_print_char(0xa)
     text_mode_print("Exception code: ")
     text_mode_print_hex32(info.ExceptionCode)
@@ -80,8 +84,7 @@ func freePage(addr uintptr) {
 
 func allocPage() uintptr {
     if freePagesList == nil {
-        text_mode_print_errorln("[PAGE] Out of pages to allocate")
-        kernelPanic()
+        kernelPanic("[PAGE] Out of pages to allocate")
     }
     p := freePagesList
     freePagesList = p.next
@@ -123,20 +126,25 @@ func (m *MemSpace) tryMapPage(page uintptr, virtAddr uintptr, flags uint8) bool 
     }
     e = pageTableEntry(page | uintptr(flags) | PAGE_PRESENT)
     pta[pageIndex] = e
-    if virtAddr >= m.VmTop {
+    if virtAddr >= m.VmTop && virtAddr < 0x80000000 {
         m.VmTop = virtAddr+PAGE_SIZE
     }
     return true
 }
 
 func (m *MemSpace) mapPage(page uintptr, virtAddr uintptr, flags uint8) {
+        //text_mode_print("Mapping ")
+        //text_mode_print_hex32(uint32(page))
+        //text_mode_print(" -> ")
+        //text_mode_print_hex32(uint32(virtAddr))
+        //text_mode_println("")
     if !m.tryMapPage(page, virtAddr, flags) {
         text_mode_print_errorln("Page already present")
         text_mode_print_hex32(uint32(page))
         text_mode_print(" -> ")
         text_mode_print_hex32(uint32(virtAddr))
         text_mode_println("")
-        kernelPanic()
+        kernelPanic("Tried to remap a page")
     }
 }
 
@@ -209,7 +217,12 @@ func InitPaging() {
     //text_mode_print_hex32(uint32(uintptr(unsafe.Pointer(kernelPageDirectory))))
     //text_mode_println("")
     for i:=uint64(0); i < topAddr; i+=PAGE_SIZE {
-        kernelMemSpace.tryMapPage(uintptr(i), uintptr(i), PAGE_RW | PAGE_PERM_KERNEL)
+        flag := uint8(PAGE_PERM_KERNEL)
+        // TODO: Get address somewhere
+        if i < 0x100000 || i >= 0x199000 {
+            flag |= PAGE_RW
+        }
+        kernelMemSpace.tryMapPage(uintptr(i), uintptr(i), flag)
     }
     switchPageDir(kernelPageDirectory)
     SetInterruptHandler(0xE, pageFaultHandler, KCS_SELECTOR, PRIV_USER)

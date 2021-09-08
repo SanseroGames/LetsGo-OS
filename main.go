@@ -5,6 +5,12 @@ import (
     "reflect"
 )
 
+var initDomain domain
+var initThread thread
+
+var testDomain domain
+var testThread thread
+
 func goEntry()
 
 func main()
@@ -69,25 +75,58 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
     text_mode_println_col("Initilaization complete", 0x2)
     //HdReadSector()
 
-    entry := LoadElfFile("/usr/shell.o", &user.MemorySpace)
-    //get a page for the initial stack
-    stackpages := 16
-    userStackAddr := uintptr(0x1fff0000)
-    for i:=0; i < stackpages; i++ {
-        stack := allocPage()
-        Memclr(stack, PAGE_SIZE)
-        user.MemorySpace.mapPage(stack, userStackAddr-uintptr(i*PAGE_SIZE), PAGE_RW | PAGE_PERM_USER)
+    //elfHdr, loadAddr := LoadElfFile("/usr/hellogo", &user.MemorySpace)
+    //if elfHdr == nil {
+    //    kernelPanic("Could not load elf file")
+    //}
+    //entry := elfHdr.Entry
+    ////get a page for the initial stack
+    //stackpages := 16
+    //userStackBaseAddr := uintptr(0xffffc000)
+    //var stackPages [16]uintptr
+    //for i:=0; i < stackpages; i++ {
+    //    stack := allocPage()
+    //    Memclr(stack, PAGE_SIZE)
+    //    user.MemorySpace.mapPage(stack, userStackBaseAddr-uintptr((i+1)*PAGE_SIZE), PAGE_RW | PAGE_PERM_USER)
+    //    stackPages[i] = stack
 
-    }
-    currentTask = user.MemorySpace
-    switchPageDir(user.MemorySpace.PageDirectory)
-    JumpUserMode(user.Segments, uintptr(entry), userStackAddr+PAGE_SIZE-16)
+    //}
+    //var aux [32]auxVecEntry
+    //nrVec := LoadAuxVector(aux[:], elfHdr, loadAddr)
+    //nrVec += nrVec % 2
+    //vecByteSize := nrVec*int(unsafe.Sizeof(aux[0]))
 
-    for {
-        Hlt()
-        //UpdateShell()
+    //stack := (*[1 << 15]uint32)(unsafe.Pointer(stackPages[0]))[:PAGE_SIZE/4]
+    //for i,n := range aux[:nrVec] {
+    //    index := PAGE_SIZE/4-1-vecByteSize/4+i*2
+    //    stack[index] = n.Type
+    //    stack[index+1] = n.Value
+    //}
+
+    //initDomain.Segments = user.Segments
+    //initDomain.MemorySpace = user.MemorySpace
+
+    //initThread.StackStart = userStackBaseAddr
+    //initDomain.EnqueueThread(&initThread)
+    //EnqueueDomain(&initDomain)
+
+    //currentTask = user.MemorySpace
+    //switchPageDir(user.MemorySpace.PageDirectory)
+    //JumpUserMode(user.Segments, uintptr(entry), userStackBaseAddr - 4 - uintptr(vecByteSize) -4-4-4)
+    err := StartProgram("/usr/test", &initDomain, &initThread)
+    if err != 0 {
+        kernelPanic("Could not start /usr/hellogo")
     }
-    //TODO: Initialize go runtime. Maybe not?
+    err = StartProgram("/usr/test", &testDomain, &testThread)
+    if err != 0 {
+        kernelPanic("Could not start /usr/test")
+    }
+    EnqueueDomain(&initDomain)
+    EnqueueDomain(&testDomain)
+    startDomain := initDomain
+    switchPageDir(startDomain.MemorySpace.PageDirectory)
+    JumpUserMode(startDomain.Segments, uintptr(startDomain.CurThread.info.EIP), uintptr(startDomain.CurThread.info.ESP))
+    kernelPanic("Could not jump to user space :/")
 }
 
 func testFunc() {
@@ -99,6 +138,12 @@ func testFunc() {
 func gpfPanic(info *InterruptInfo, regs *RegisterState){
     text_mode_print_char(0xa)
     text_mode_print_errorln("Received General Protection fault. Disabling Interrupts and halting")
+    text_mode_print("Thread ID: ")
+    text_mode_print_hex(uint8(currentDomain.CurThread.tid))
+    text_mode_println("")
+    text_mode_print("Errorcode: ")
+    text_mode_print_hex32(info.ExceptionCode)
+    text_mode_println("")
     panicHelper(info, regs)
 }
 
@@ -108,7 +153,8 @@ func panicHelper(info *InterruptInfo, regs *RegisterState){
     Hlt()
 }
 
-func kernelPanic() {
+func kernelPanic(msg string) {
+    text_mode_print_errorln(msg)
     text_mode_print_errorln("kernel panic :(")
     DisableInterrupts()
     Hlt()
@@ -138,6 +184,12 @@ func printRegisters(info *InterruptInfo, regs *RegisterState){
     text_mode_print_char(0x0a)
     text_mode_print("EBP: ")
     text_mode_print_hex32(regs.EBP)
+}
+
+func printTid() {
+    text_mode_print("tid: ")
+    text_mode_print_hex(uint8(currentDomain.CurThread.tid))
+    text_mode_print(" ")
 }
 
 func debug_print_flags(flags uint8){

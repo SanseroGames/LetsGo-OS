@@ -30,19 +30,19 @@ type InterruptInfo struct {
 
 // Reverse of stack pushing
 type RegisterState struct {
-     GS uint32
-     FS uint32
-     ES uint32
-     DS uint32
+    GS uint32
+    FS uint32
+    ES uint32
+    DS uint32
 
-     EDI uint32
-     ESI uint32
-     EBP uint32
-     ESP uint32
-     EBX uint32
-     EDX uint32
-     ECX uint32
-     EAX uint32
+    EDI uint32
+    ESI uint32
+    EBP uint32
+    KernelESP uint32
+    EBX uint32
+    EDX uint32
+    ECX uint32
+    EAX uint32
 }
 
 const (
@@ -55,8 +55,6 @@ var (
     handlers [256]func(info *InterruptInfo, regs *RegisterState)
     infoEscapePreventer InterruptInfo
     regsEscapePreventer RegisterState
-    currentTask MemSpace
-
 )
 
 func isrVector()
@@ -123,11 +121,12 @@ func do_isr(regs RegisterState, info InterruptInfo){
 
     infoEscapePreventer = info
     regsEscapePreventer = regs
-
     handlers[info.InterruptNumber](&infoEscapePreventer, &regsEscapePreventer)
+    Schedule(&infoEscapePreventer, &regsEscapePreventer)
     info = infoEscapePreventer
     regs = regsEscapePreventer
-    switchPageDir(currentTask.PageDirectory)
+
+    switchPageDir(currentDomain.MemorySpace.PageDirectory)
 }
 
 func SetInterruptHandler(irq uint8, f func (info *InterruptInfo, regs *RegisterState), selector int, priv uint8){

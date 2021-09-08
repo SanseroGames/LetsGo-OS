@@ -102,8 +102,8 @@ func InitSegments() {
     //printGdt(gdtTable[:gdtTableLen])
 }
 
-func GetSegment(index int, res *GdtSegment) {
-    if index < 0 || index > gdtTableLen { return }
+func GetSegment(index int, res *GdtSegment) int {
+    if index < 0 || index > gdtTableLen { return -1 }
     (*res).limit = uintptr(gdtTable[index].limitLow)
     (*res).limit += uintptr((gdtTable[index].limitHighAndFlags & 0xF)) << 16
     (*res).base = uintptr(gdtTable[index].baseLow)
@@ -111,6 +111,7 @@ func GetSegment(index int, res *GdtSegment) {
     (*res).base += uintptr(gdtTable[index].baseHigh) << 24
     (*res).access = gdtTable[index].access
     (*res).flags = gdtTable[index].limitHighAndFlags & 0xF0
+    return 0
 
 }
 

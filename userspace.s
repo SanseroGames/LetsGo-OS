@@ -5,6 +5,7 @@ TEXT ·flushTss(SB),NOSPLIT,$0
     LTR AX
 	RET
 
+// Possible that this will fail in the future
 TEXT ·hackyGetFuncAddr(SB),NOSPLIT,$0
     MOVL ·funcAddr+0(FP), AX
     MOVL (AX), AX
@@ -29,13 +30,12 @@ TEXT ·JumpUserMode(SB),NOSPLIT,$0
     MOVL ·segments_ss+8(FP), AX
     ORW $3, AX
     PUSHL AX
-    MOVL ·stackStart+28(FP), AX
+    MOVL ·stackAddr+28(FP), AX
     PUSHL AX
     PUSHFL
     MOVL ·segments_cs+4(FP), AX
     ORW $3, AX
     PUSHL AX
-    // Possible that this will fail in the future
     MOVL ·funcAddr+24(FP), AX
     PUSHL AX
     

@@ -12,7 +12,7 @@ const (
 var (
     multibootInfo *MultibootInfo
 
-    loadedModules [4]MultibootModule
+    loadedModules [10]MultibootModule
 
     memoryMaps [6]MemoryMap
 )
@@ -69,6 +69,7 @@ func InitMultiboot(info *MultibootInfo) {
             hdr := (*reflect.StringHeader)(unsafe.Pointer(&loadedModules[foundModules].Cmdline))
             hdr.Data = uintptr(unsafe.Pointer(info))+8+uintptr(i)*4+16
             hdr.Len = int(mbI[i+1]-16)-1 //Possible underflow
+            foundModules++
         }
         if mbI[i] == 6 {
             size := mbI[i+1]

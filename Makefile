@@ -1,7 +1,13 @@
+define newline
+
+
+endef
+
 BUILD_DIR := build
 USR_BUILD_DIR := $(BUILD_DIR)/usr
 
 LD := ld
+CC := gcc
 AS := nasm
 
 GOOS := linux
@@ -11,6 +17,7 @@ ARCH := x86
 
 LD_FLAGS := -n -melf_i386 -T arch/$(ARCH)/script/linker.ld -static --no-ld-generated-unwind-info
 AS_FLAGS := -g -f elf32 -F dwarf -I arch/$(ARCH)/asm/
+CC_FLAGS := -static -fno-inline -O0
 
 kernel_target :=$(BUILD_DIR)/kernel-$(ARCH).bin
 iso_target := $(BUILD_DIR)/kernel-$(ARCH).iso
@@ -20,7 +27,10 @@ disk_image := disk/file.img
 asm_src_files := $(wildcard arch/$(ARCH)/asm/*.s)
 asm_obj_files := $(patsubst arch/$(ARCH)/asm/%.s, $(BUILD_DIR)/arch/$(ARCH)/asm/%.o, $(asm_src_files))
 
-usr_apps := $(wildcard usr/*).o
+usr_go_apps_src := $(wildcard usr/*/main.go)
+usr_go_apps_obj := $(patsubst usr/%/main.go, $(BUILD_DIR)/usr/%.o, $(usr_go_apps_src))
+usr_c_apps_src := $(wildcard usr/*/main.c)
+usr_c_apps_obj := $(patsubst usr/%/main.c, $(BUILD_DIR)/usr/%.o, $(usr_c_apps_src))
 
 .PHONY: kernel usr iso
 
@@ -30,11 +40,15 @@ $(kernel_target): $(asm_obj_files) go.o
 	@echo "[$(LD)] linking kernel-$(ARCH).bin"
 	@$(LD) $(LD_FLAGS) -o $(kernel_target) $(asm_obj_files) $(BUILD_DIR)/go.o
 
-$(usr_apps):
-	@echo "[go] Building $@"
-	@GOARCH=$(GOARCH) GOOS=$(GOOS) go build -o $(USR_BUILD_DIR)/$(notdir $@) $(basename $@)/main.go
+$(USR_BUILD_DIR)/%.o: usr/%/main.go
+	@echo "[go] Building $@ (from $<)"
+	@GOARCH=$(GOARCH) GOOS=$(GOOS) go build -o $(USR_BUILD_DIR)/$(basename $(notdir $@)) $<
 
-usr: $(usr_apps)
+$(USR_BUILD_DIR)/%.o: usr/%/main.c
+	@echo "[CC] Building $@ (from $<)"
+	@$(CC) -m32 $(CC_FLAGS) -o $(USR_BUILD_DIR)/$(basename $(notdir $@)) $<
+
+usr: $(usr_go_apps_obj) $(usr_c_apps_obj)
 
 go.o:
 	@mkdir -p $(BUILD_DIR)
@@ -57,14 +71,17 @@ $(BUILD_DIR)/arch/$(ARCH)/asm/%.o: arch/$(ARCH)/asm/%.s
 
 iso: $(iso_target)
 
-$(iso_target): $(kernel_target) $(usr_apps)
+$(iso_target): $(kernel_target) usr
 	@echo "[grub] building ISO kernel-$(ARCH).iso"
 
 	@mkdir -p $(BUILD_DIR)/isofiles/boot/grub
 	@mkdir -p $(BUILD_DIR)/isofiles/usr/
 	@cp $(kernel_target) $(BUILD_DIR)/isofiles/boot/kernel.bin
+
+	@cp $(wildcard $(USR_BUILD_DIR)/*) $(BUILD_DIR)/isofiles/usr/
+	@a="$$(./dup.sh $(patsubst $(USR_BUILD_DIR)/%,/usr/%, $(wildcard $(USR_BUILD_DIR)/*)))"; sed -e "s#{MODULES}#$$a#g" arch/x86/script/grub.cfg.tpl | tr '@' '\n' > arch/x86/script/grub.cfg
 	@cp arch/$(ARCH)/script/grub.cfg $(BUILD_DIR)/isofiles/boot/grub
-	@cp $(wildcard $(USR_BUILD_DIR)/*.o) $(BUILD_DIR)/isofiles/usr/
+
 	@grub-mkrescue -o $(iso_target) $(BUILD_DIR)/isofiles 2>&1 | sed -e "s/^/  | /g"
 	@rm -r $(BUILD_DIR)/isofiles
 

@@ -24,19 +24,19 @@ TEXT ·getIDT(SB),NOSPLIT,$0
 
 TEXT ·isrVector(SB), NOSPLIT,$0
     //"Pushes all general purpose registers onto the stack in the following order: (E)AX, (E)CX, (E)DX, (E)BX, (E)SP, (E)BP, (E)SI, (E)DI. The value of SP is the value before the actual push of SP."
-    BYTE $0x60
-    PUSHL GS
-    PUSHL FS
-    PUSHL ES
+    PUSHAL
     PUSHL DS
+    PUSHL ES
+    PUSHL FS
+    PUSHL GS
 
     CALL ·do_isr(SB)
 
-    POPL DS
-    POPL ES
-    POPL FS
     POPL GS
-    BYTE $0x61
+    POPL FS
+    POPL ES
+    POPL DS
+    POPAL
     ADDL $8, SP
     IRETL
 

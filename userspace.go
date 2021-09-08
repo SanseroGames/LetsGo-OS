@@ -50,17 +50,14 @@ const (
     userModeLimit = 0xFFFFFF
     TSS_IS_TSS = 1 << 0
     TSS_32MODE = 1 << 3
+    defaultStackPages = 16
+    defaultStackStart = uintptr(0xffffc000)
 )
 
 var (
     tss tssEntry
-    user userspace = userspace{}
+    defaultUserSegments SegmentList
 )
-
-type userspace struct {
-    Segments SegmentList
-    MemorySpace MemSpace
-}
 
 // Don't forget to multiply by 8. it is not array index.
 func flushTss(segmentIndex int)
@@ -73,19 +70,71 @@ func JumpUserModeFunc (segments SegmentList, funcAddr func(), stackAddr uintptr)
     JumpUserMode(segments, hackyGetFuncAddr(funcAddr), stackAddr)
 }
 
+
+// Need pointer as this function should not do any memory allocations
+func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
+    if outDomain == nil || outMainThread == nil {
+        text_mode_print_errorln("Cannot start program. Plase allocate the memory for me")
+        return 1
+    }
+    outDomain.Segments = defaultUserSegments
+    outDomain.MemorySpace = createNewPageDirectory()
+    outDomain.CurThread = outMainThread
+
+    outMainThread.domain = outDomain
+    outMainThread.next = outMainThread
+    outMainThread.info.CS = defaultUserSegments.cs | 3
+    outMainThread.info.SS = defaultUserSegments.ss | 3
+    outMainThread.regs.GS = defaultUserSegments.gs | 3
+    outMainThread.regs.FS = defaultUserSegments.fs | 3
+    outMainThread.regs.ES = defaultUserSegments.es | 3
+    outMainThread.regs.DS = defaultUserSegments.ds | 3
+    outMainThread.fpOffset = 0xffffffff
+
+    elfHdr, loadAddr, topAddr := LoadElfFile(path, &outDomain.MemorySpace)
+
+    outDomain.MemorySpace.Brk = topAddr
+
+    if elfHdr == nil {
+        text_mode_print_errorln("Could not load elf file")
+        return 2
+    }
+    var stackPages [defaultStackPages]uintptr
+    for i:=0; i < defaultStackPages; i++ {
+        stack := allocPage()
+        Memclr(stack, PAGE_SIZE)
+        outDomain.MemorySpace.mapPage(stack, defaultStackStart-uintptr((i+1)*PAGE_SIZE), PAGE_RW | PAGE_PERM_USER)
+        stackPages[i] = stack
+    }
+
+    var aux [32]auxVecEntry
+    nrVec := LoadAuxVector(aux[:], elfHdr, loadAddr)
+    nrVec += nrVec % 2
+    vecByteSize := nrVec*int(unsafe.Sizeof(aux[0]))
+
+    stack := (*[1 << 15]uint32)(unsafe.Pointer(stackPages[0]))[:PAGE_SIZE/4]
+    for i,n := range aux[:nrVec] {
+        index := PAGE_SIZE/4-1-vecByteSize/4+i*2
+        stack[index] = n.Type
+        stack[index+1] = n.Value
+    }
+    outMainThread.info.EIP = elfHdr.Entry
+    outMainThread.info.ESP = uint32(defaultStackStart) - 4 - uint32(vecByteSize) -4-4-4
+    return 0
+}
+
+
 func InitUserMode(kernelStackStart uintptr) {             // Add usermode code segment
     userModeCS := AddSegment(userModeBase, userModeLimit, PRIV_USER | SEG_EXEC | SEG_R | SEG_NORMAL, SEG_GRAN_4K_PAGE)
     // Add usermode data segment
     userModeDS := AddSegment(userModeBase, userModeLimit, PRIV_USER | SEG_NOEXEC | SEG_W | SEG_NORMAL, SEG_GRAN_4K_PAGE)
 
-    user.Segments.cs = uint32(userModeCS*8)
-    user.Segments.ss = uint32(userModeDS*8)
-    user.Segments.ds = uint32(userModeDS*8)
-    user.Segments.es = uint32(userModeDS*8)
-    user.Segments.fs = uint32(userModeDS*8)
-    user.Segments.gs = uint32(userModeDS*8)
-
-    user.MemorySpace = createNewPageDirectory()
+    defaultUserSegments.cs = uint32(userModeCS*8)
+    defaultUserSegments.ss = uint32(userModeDS*8)
+    defaultUserSegments.ds = uint32(userModeDS*8)
+    defaultUserSegments.es = uint32(userModeDS*8)
+    defaultUserSegments.fs = 0
+    defaultUserSegments.gs = 0
 
     tssIndex := AddSegment(uintptr(unsafe.Pointer(&tss)), unsafe.Sizeof(tss), PRIV_KERNEL | SEG_NORW | TSS_32MODE | SEG_SYSTEM | TSS_IS_TSS, SEG_GRAN_BYTE)
 
