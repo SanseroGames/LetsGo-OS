@@ -5,7 +5,7 @@ import (
     "reflect"
 )
 
-const DOMAINS = 0xf
+const DOMAINS = 0x1
 
 var domains [DOMAINS]domain
 var threads [DOMAINS]thread
@@ -27,26 +27,6 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
     text_mode_println(s2)
     text_mode_println(s3)
     text_mode_print_char(0x0a)
-
-    //text_mode_print_hex32(uint32(stackstart))
-    //text_mode_print_char(0x0a)
-
-    //for i, n := range (*info).tmp {
-    //    if (i > 64) {break}
-    //    text_mode_print_hex32(n)
-    //    if i % 8 == 7 {
-    //        text_mode_print_char(0x0a)
-    //    } else if i % 2 == 1 {
-    //        text_mode_print("  ")
-    //    } else {
-    //        text_mode_print(" ")
-    //    }
-    //}
-    //text_mode_print_hex32(uint32(len((*info).tmp)))
-    //text_mode_println("")
-
-    //text_mode_print_hex32(uint32(len((*info).elems)))
-    //text_mode_println("")
 
     InitSegments()
 
@@ -74,50 +54,12 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
     text_mode_println_col("Initilaization complete", 0x2)
     //HdReadSector()
 
-    //elfHdr, loadAddr := LoadElfFile("/usr/hellogo", &user.MemorySpace)
-    //if elfHdr == nil {
-    //    kernelPanic("Could not load elf file")
-    //}
-    //entry := elfHdr.Entry
-    ////get a page for the initial stack
-    //stackpages := 16
-    //userStackBaseAddr := uintptr(0xffffc000)
-    //var stackPages [16]uintptr
-    //for i:=0; i < stackpages; i++ {
-    //    stack := allocPage()
-    //    Memclr(stack, PAGE_SIZE)
-    //    user.MemorySpace.mapPage(stack, userStackBaseAddr-uintptr((i+1)*PAGE_SIZE), PAGE_RW | PAGE_PERM_USER)
-    //    stackPages[i] = stack
-
-    //}
-    //var aux [32]auxVecEntry
-    //nrVec := LoadAuxVector(aux[:], elfHdr, loadAddr)
-    //nrVec += nrVec % 2
-    //vecByteSize := nrVec*int(unsafe.Sizeof(aux[0]))
-
-    //stack := (*[1 << 15]uint32)(unsafe.Pointer(stackPages[0]))[:PAGE_SIZE/4]
-    //for i,n := range aux[:nrVec] {
-    //    index := PAGE_SIZE/4-1-vecByteSize/4+i*2
-    //    stack[index] = n.Type
-    //    stack[index+1] = n.Value
-    //}
-
-    //initDomain.Segments = user.Segments
-    //initDomain.MemorySpace = user.MemorySpace
-
-    //initThread.StackStart = userStackBaseAddr
-    //initDomain.EnqueueThread(&initThread)
-    //EnqueueDomain(&initDomain)
-
-    //currentTask = user.MemorySpace
-    //switchPageDir(user.MemorySpace.PageDirectory)
-    //JumpUserMode(user.Segments, uintptr(entry), userStackBaseAddr - 4 - uintptr(vecByteSize) -4-4-4)
     for i:=0; i < DOMAINS; i++ {
         var err int
-        if i % 0x13 == 0 || true{
+        if i % 0x13 == 0 && false {
             err = StartProgram("/usr/test", &domains[i], &threads[i])
         } else {
-            err = StartProgram("/usr/hellogo", &domains[i], &threads[i])
+            err = StartProgram("/usr/statx", &domains[i], &threads[i])
         }
         if err != 0 {
             kernelPanic("Could not start /usr/test")
@@ -126,15 +68,9 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
     for i := range domains {
         EnqueueDomain(&domains[i])
     }
-    // workaround for a pagefault that happens later
-    //var t InterruptInfo
-    //var r RegisterState
-    //DequeueDomain(&domains[0], &t, &r)
-    //EnqueueDomain(&domains[0])
 
     currentDomain = &domains[0x0]
     switchPageDir(currentDomain.MemorySpace.PageDirectory)
-    //JumpUserMode(currentDomain.Segments, uintptr(currentDomain.CurThread.info.EIP), uintptr(currentDomain.CurThread.info.ESP), currentDomain.)
     JumpUserMode(currentDomain.CurThread.regs, currentDomain.CurThread.info)
     kernelPanic("Could not jump to user space :/")
 }

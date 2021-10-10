@@ -123,11 +123,11 @@ func Schedule() {
         return
     }
 
-    //addr := uintptr(unsafe.Pointer(&(currentDomain.CurThread.fpState)))
-    //offset := 16 - (addr % 16)
-    //currentDomain.CurThread.fpOffset = offset
+    addr := uintptr(unsafe.Pointer(&(currentDomain.CurThread.fpState)))
+    offset := 16 - (addr % 16)
+    currentDomain.CurThread.fpOffset = offset
 
-    //backupFpRegs(addr + offset)
+    backupFpRegs(addr + offset)
 
     //TODO: Make switch to thread (would not work yet)
     currentDomain.CurThread = currentDomain.CurThread.next
@@ -149,7 +149,7 @@ func switchToDomain(d *domain) {
             text_mode_print_hex32(uint32(offset))
             kernelPanic("Cannot restore FP state. Not aligned. Did array move?")
         }
-        //restoreFpRegs(addr + offset)
+        restoreFpRegs(addr + offset)
     }
 }
 

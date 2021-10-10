@@ -6,7 +6,7 @@ import (
     "syscall"
 )
 
-const PRINT_SYSCALL = true
+const PRINT_SYSCALL = false
 
 type ioVec struct {
     iovBase uintptr    /* Starting address */
@@ -368,9 +368,9 @@ func linuxSyscallHandler(){
 }
 
 func linuxExitGroupSyscall() uint32 {
-    text_mode_print("Exiting domain ")
-    text_mode_print_hex(uint8(currentDomain.pid))
-    text_mode_println("")
+    //text_mode_print("Exiting domain ")
+    //text_mode_print_hex(uint8(currentDomain.pid))
+    //text_mode_println("")
     DequeueDomain(currentDomain)
     // Already in new context so return value from last syscall from current domain
     return currentRegs.EAX
@@ -420,14 +420,15 @@ func linuxCloneSyscall() uint32 {
     parent_tid := currentRegs.EDX
     tls := currentRegs.ESI
     child_tid := currentRegs.EDI
+    text_mode_print("flags:")
     text_mode_print_hex32(flags)
-    text_mode_print(" ")
+    text_mode_print(" stack:")
     text_mode_print_hex32(stack)
-    text_mode_print(" ")
+    text_mode_print(" parent:")
     text_mode_print_hex32(parent_tid)
-    text_mode_print(" ")
+    text_mode_print(" tls:")
     text_mode_print_hex32(tls)
-    text_mode_print(" ")
+    text_mode_print(" child:")
     text_mode_print_hex32(child_tid)
     text_mode_println("")
     if flags & _CLONE_THREAD == 0 {
@@ -438,28 +439,19 @@ func linuxCloneSyscall() uint32 {
     newThreadMem := allocPage()
     Memclr(newThreadMem, PAGE_SIZE)
     newThread := (* thread)(unsafe.Pointer(newThreadMem))
-    newThread.info.CS = currentInfo.CS
-    newThread.info.SS = currentInfo.SS
-    newThread.info.ESP = stack
-    newThread.info.EIP = currentInfo.EIP
-    newThread.info.EFLAGS = currentInfo.EFLAGS
-    newThread.regs = *currentRegs
-    newThread.regs.EAX = 0
-    newThread.fpOffset = 0xffffffff
-    newThread.tid = currentDomain.CurThread.tid+1
-    newThread.StackStart = uintptr(stack)
+    CreateNewThread(newThread, uintptr(stack), currentDomain.CurThread)
     currentDomain.EnqueueThread(newThread)
     return 1
 }
 
 func linuxMincoreSyscall() uint32 {
-    text_mode_print(" addr: ")
-    text_mode_print_hex32(currentRegs.EBX)
-    text_mode_print(" length: ")
-    text_mode_print_hex32(currentRegs.ECX)
-    text_mode_print(" vec: ")
-    text_mode_print_hex32(currentRegs.EDX)
-    text_mode_println("")
+    //text_mode_print(" addr: ")
+    //text_mode_print_hex32(currentRegs.EBX)
+    //text_mode_print(" length: ")
+    //text_mode_print_hex32(currentRegs.ECX)
+    //text_mode_print(" vec: ")
+    //text_mode_print_hex32(currentRegs.EDX)
+    //text_mode_println("")
     //addr := currentRegs.EBX
     length := currentRegs.ECX
     vec, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.EDX))
@@ -518,17 +510,17 @@ func linuxMmap2Syscall() uint32 {
     if prot == 0 {
         return uint32(currentDomain.MemorySpace.VmTop)
     }
-    text_mode_print("vmtop: ")
-    text_mode_print_hex32(uint32(currentDomain.MemorySpace.VmTop))
-    text_mode_print(" target: ")
-    text_mode_print_hex32(currentRegs.EBX)
-    text_mode_print(" size: ")
-    text_mode_print_hex32(size)
-    text_mode_print(" prot: ")
-    text_mode_print_hex32(currentRegs.EDX)
-    text_mode_print(" flags: ")
-    text_mode_print_hex32(currentRegs.ESI)
-    text_mode_println("")
+    //text_mode_print("vmtop: ")
+    //text_mode_print_hex32(uint32(currentDomain.MemorySpace.VmTop))
+    //text_mode_print(" target: ")
+    //text_mode_print_hex32(currentRegs.EBX)
+    //text_mode_print(" size: ")
+    //text_mode_print_hex32(size)
+    //text_mode_print(" prot: ")
+    //text_mode_print_hex32(currentRegs.EDX)
+    //text_mode_print(" flags: ")
+    //text_mode_print_hex32(currentRegs.ESI)
+    //text_mode_println("")
     for i:=uint32(0); i < size; i+=PAGE_SIZE {
         p := allocPage()
         Memclr(p, PAGE_SIZE)
@@ -538,7 +530,7 @@ func linuxMmap2Syscall() uint32 {
         }
         currentDomain.MemorySpace.mapPage(p, uintptr(target+i), flags)
     }
-    text_mode_print_hex32(target)
+    //text_mode_print_hex32(target)
     return target
 }
 
@@ -588,7 +580,7 @@ func linuxOpenSyscall() uint32 {
         return ^uint32(syscall.EFAULT)+1
     }
     s := cstring(addr)
-    text_mode_println(s)
+    //text_mode_println(s)
     if s == "/sys/kernel/mm/transparent_hugepage/hpage_pmd_size" && false {
         text_mode_println("reading page size")
         currentRegs.EAX = 0x42

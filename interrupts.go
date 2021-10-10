@@ -78,46 +78,6 @@ func setGS(gs_segment uint32)
 
 //go:nosplit
 func do_isr(regs RegisterState, info InterruptInfo){
-    //text_mode_print("Interrupt")
-    //text_mode_print_hex(uint8(info.SS))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(info.ESP))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(info.EFLAGS))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(info.CS))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(info.RIP))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(info.ExceptionCode))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(info.InterruptNumber))
-    //text_mode_print_char(0x20)
-
-    //text_mode_print_hex(uint8(regs.EAX))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.ECX))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.EDX))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.EBX))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.ESP))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.EBP))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.ESI))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.EDI))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.DS))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.ES))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.FS))
-    //text_mode_print_char(0x20)
-    //text_mode_print_hex(uint8(regs.GS))
-    //text_mode_print_char(0x20)
     setGS(KGS_SELECTOR)
     setDS(KDS_SELECTOR)
 
@@ -129,12 +89,7 @@ func do_isr(regs RegisterState, info InterruptInfo){
     currentRegs = &(currentDomain.CurThread.regs)
     handlers[info.InterruptNumber]()
     Schedule()
-    if currentDomain.pid == 0  && stop < 10{
-        text_mode_println("")
-        text_mode_print("ret:")
-        text_mode_print_hex32(currentDomain.CurThread.regs.EAX)
-        text_mode_print(" ")
-    }
+
     info = currentDomain.CurThread.info
     regs = currentDomain.CurThread.regs
 

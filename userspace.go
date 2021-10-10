@@ -62,14 +62,9 @@ var (
 // Don't forget to multiply by 8. it is not array index.
 func flushTss(segmentIndex int)
 
-//func JumpUserMode (segments SegmentList, funcAddr uintptr, stackAddr uintptr)
 func JumpUserMode (regs RegisterState, info InterruptInfo)
 
 func hackyGetFuncAddr(funcAddr func()) uintptr
-
-func JumpUserModeFunc (segments SegmentList, funcAddr func(), stackAddr uintptr){
-    //JumpUserMode(segments, hackyGetFuncAddr(funcAddr), stackAddr)
-}
 
 
 func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread) {
