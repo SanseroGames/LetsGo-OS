@@ -46,18 +46,21 @@ func getCurrentPageDir() *PageTable
 
 func getPageFaultAddr() uint32
 
-func pageFaultHandler(info *InterruptInfo, regs *RegisterState) {
+func pageFaultHandler() {
     text_mode_print_char(0xa)
     text_mode_print_errorln("Page Fault! Disabling Interrupt and halting!")
     text_mode_print_char(0xa)
+    text_mode_print("Domain ID:")
+    text_mode_print_hex32(currentDomain.pid)
+    text_mode_println("")
     text_mode_print("Thread ID:")
     text_mode_print_hex(uint8(currentDomain.CurThread.tid))
     text_mode_print_char(0xa)
     text_mode_print("Exception code: ")
-    text_mode_print_hex32(info.ExceptionCode)
+    text_mode_print_hex32(currentInfo.ExceptionCode)
     text_mode_print_char(0xa)
     text_mode_print("EIP: ")
-    text_mode_print_hex32(info.EIP)
+    text_mode_print_hex32(currentInfo.EIP)
     text_mode_println("")
     text_mode_print("Causing Address: ")
     text_mode_print_hex32(getPageFaultAddr())

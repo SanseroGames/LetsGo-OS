@@ -20,8 +20,8 @@ const (
 
 var picHandlers [16]func()
 
-func PICInterruptHandler(info *InterruptInfo, regs *RegisterState){
-    irq := info.InterruptNumber - uint32(PIC1Offset)
+func PICInterruptHandler(){
+    irq := currentInfo.InterruptNumber - uint32(PIC1Offset)
     if(irq == 7){
         Outb(PIC1Port, PIC_ReadISR)
         res := Inb(PIC1Port)

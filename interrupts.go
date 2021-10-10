@@ -49,12 +49,16 @@ const (
     INTERRUPT_GATE = 0xE
 )
 
+type InterruptHandler func()
+
 var (
     idtTable = [256]IdtEntry{}
     idtDescriptor IdtDescriptor = IdtDescriptor{}
-    handlers [256]func(info *InterruptInfo, regs *RegisterState)
-    infoEscapePreventer InterruptInfo
-    regsEscapePreventer RegisterState
+    handlers [256]InterruptHandler
+
+    // Convenience variables that always point to the fields of currentDomain.CurThread
+    currentInfo *InterruptInfo
+    currentRegs *RegisterState
 )
 
 func isrVector()
@@ -119,34 +123,42 @@ func do_isr(regs RegisterState, info InterruptInfo){
 
     switchPageDir(kernelMemSpace.PageDirectory)
 
-    infoEscapePreventer = info
-    regsEscapePreventer = regs
-    handlers[info.InterruptNumber](&infoEscapePreventer, &regsEscapePreventer)
-    Schedule(&infoEscapePreventer, &regsEscapePreventer)
-    info = infoEscapePreventer
-    regs = regsEscapePreventer
+    currentDomain.CurThread.info = info
+    currentDomain.CurThread.regs = regs
+    currentInfo = &(currentDomain.CurThread.info)
+    currentRegs = &(currentDomain.CurThread.regs)
+    handlers[info.InterruptNumber]()
+    Schedule()
+    if currentDomain.pid == 0  && stop < 10{
+        text_mode_println("")
+        text_mode_print("ret:")
+        text_mode_print_hex32(currentDomain.CurThread.regs.EAX)
+        text_mode_print(" ")
+    }
+    info = currentDomain.CurThread.info
+    regs = currentDomain.CurThread.regs
 
     switchPageDir(currentDomain.MemorySpace.PageDirectory)
 }
 
-func SetInterruptHandler(irq uint8, f func (info *InterruptInfo, regs *RegisterState), selector int, priv uint8){
+func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8){
     handlers[irq] = f
     idtTable[irq].selector = uint16(selector)
     idtTable[irq].flags = uint16(priv | 0xE | PRESENT)<<8
 
 }
 
-func defaultHandler(info *InterruptInfo, regs *RegisterState){
+func defaultHandler(){
     text_mode_print_char(0xa)
     text_mode_print_errorln("Unhandled interrupt! Disabling Interrupt and halting!")
     text_mode_print("Interrupt number: ")
-    text_mode_print_hex(uint8(info.InterruptNumber))
+    text_mode_print_hex(uint8(currentInfo.InterruptNumber))
     text_mode_print_char(0xa)
     text_mode_print("Exception code: ")
-    text_mode_print_hex32(info.ExceptionCode)
+    text_mode_print_hex32(currentInfo.ExceptionCode)
     text_mode_print_char(0xa)
     text_mode_print("EIP: ")
-    text_mode_print_hex32(info.EIP)
+    text_mode_print_hex32(currentInfo.EIP)
     DisableInterrupts()
     Hlt()
 }

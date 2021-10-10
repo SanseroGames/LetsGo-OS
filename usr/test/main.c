@@ -2,5 +2,5 @@
 
 int main() {
     puts("hello from puts");
-    printf("Hello World from printf\n");
+    printf("Hello World from printf. AAAAAAAAAAAAAAAAA\n");
 }

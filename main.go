@@ -5,11 +5,10 @@ import (
     "reflect"
 )
 
-var initDomain domain
-var initThread thread
+const DOMAINS = 0xf
 
-var testDomain domain
-var testThread thread
+var domains [DOMAINS]domain
+var threads [DOMAINS]thread
 
 func goEntry()
 
@@ -113,38 +112,46 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
     //currentTask = user.MemorySpace
     //switchPageDir(user.MemorySpace.PageDirectory)
     //JumpUserMode(user.Segments, uintptr(entry), userStackBaseAddr - 4 - uintptr(vecByteSize) -4-4-4)
-    err := StartProgram("/usr/test", &initDomain, &initThread)
-    if err != 0 {
-        kernelPanic("Could not start /usr/hellogo")
+    for i:=0; i < DOMAINS; i++ {
+        var err int
+        if i % 0x13 == 0 || true{
+            err = StartProgram("/usr/test", &domains[i], &threads[i])
+        } else {
+            err = StartProgram("/usr/hellogo", &domains[i], &threads[i])
+        }
+        if err != 0 {
+            kernelPanic("Could not start /usr/test")
+        }
     }
-    err = StartProgram("/usr/test", &testDomain, &testThread)
-    if err != 0 {
-        kernelPanic("Could not start /usr/test")
+    for i := range domains {
+        EnqueueDomain(&domains[i])
     }
-    EnqueueDomain(&initDomain)
-    EnqueueDomain(&testDomain)
-    startDomain := initDomain
-    switchPageDir(startDomain.MemorySpace.PageDirectory)
-    JumpUserMode(startDomain.Segments, uintptr(startDomain.CurThread.info.EIP), uintptr(startDomain.CurThread.info.ESP))
+    // workaround for a pagefault that happens later
+    //var t InterruptInfo
+    //var r RegisterState
+    //DequeueDomain(&domains[0], &t, &r)
+    //EnqueueDomain(&domains[0])
+
+    currentDomain = &domains[0x0]
+    switchPageDir(currentDomain.MemorySpace.PageDirectory)
+    //JumpUserMode(currentDomain.Segments, uintptr(currentDomain.CurThread.info.EIP), uintptr(currentDomain.CurThread.info.ESP), currentDomain.)
+    JumpUserMode(currentDomain.CurThread.regs, currentDomain.CurThread.info)
     kernelPanic("Could not jump to user space :/")
 }
 
-func testFunc() {
-    text_mode_println("Hi, from user mode")
-    //print("asdf")
-}
-
-
-func gpfPanic(info *InterruptInfo, regs *RegisterState){
+func gpfPanic(){
     text_mode_print_char(0xa)
     text_mode_print_errorln("Received General Protection fault. Disabling Interrupts and halting")
+    text_mode_print("Domain ID: ")
+    text_mode_print_hex(uint8(currentDomain.pid))
+    text_mode_println("")
     text_mode_print("Thread ID: ")
     text_mode_print_hex(uint8(currentDomain.CurThread.tid))
     text_mode_println("")
     text_mode_print("Errorcode: ")
-    text_mode_print_hex32(info.ExceptionCode)
+    text_mode_print_hex32(currentInfo.ExceptionCode)
     text_mode_println("")
-    panicHelper(info, regs)
+    panicHelper(currentInfo, currentRegs)
 }
 
 func panicHelper(info *InterruptInfo, regs *RegisterState){
@@ -156,6 +163,7 @@ func panicHelper(info *InterruptInfo, regs *RegisterState){
 func kernelPanic(msg string) {
     text_mode_print_errorln(msg)
     text_mode_print_errorln("kernel panic :(")
+    printTid()
     DisableInterrupts()
     Hlt()
 }
@@ -187,7 +195,9 @@ func printRegisters(info *InterruptInfo, regs *RegisterState){
 }
 
 func printTid() {
-    text_mode_print("tid: ")
+    text_mode_print("pid: ")
+    text_mode_print_hex(uint8(currentDomain.pid))
+    text_mode_print(" tid: ")
     text_mode_print_hex(uint8(currentDomain.CurThread.tid))
     text_mode_print(" ")
 }

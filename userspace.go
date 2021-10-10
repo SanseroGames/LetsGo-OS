@@ -62,15 +62,41 @@ var (
 // Don't forget to multiply by 8. it is not array index.
 func flushTss(segmentIndex int)
 
-func JumpUserMode (segments SegmentList, funcAddr uintptr, stackAddr uintptr)
+//func JumpUserMode (segments SegmentList, funcAddr uintptr, stackAddr uintptr)
+func JumpUserMode (regs RegisterState, info InterruptInfo)
 
 func hackyGetFuncAddr(funcAddr func()) uintptr
 
 func JumpUserModeFunc (segments SegmentList, funcAddr func(), stackAddr uintptr){
-    JumpUserMode(segments, hackyGetFuncAddr(funcAddr), stackAddr)
+    //JumpUserMode(segments, hackyGetFuncAddr(funcAddr), stackAddr)
 }
 
 
+func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread) {
+    newThreadAddr := (uintptr)(unsafe.Pointer(outThread))
+    Memclr(newThreadAddr, int(unsafe.Sizeof(outThread)))
+    outThread.fpOffset = 0xffffffff
+    outThread.StackStart = newStack
+    outThread.info.CS = defaultUserSegments.cs | 3
+    outThread.info.SS = defaultUserSegments.ss | 3
+    outThread.regs.GS = defaultUserSegments.gs | 3
+    outThread.regs.FS = defaultUserSegments.fs | 3
+    outThread.regs.ES = defaultUserSegments.es | 3
+    outThread.regs.DS = defaultUserSegments.ds | 3
+    if cloneThread != nil {
+        outThread.info.CS = cloneThread.info.CS
+        outThread.info.SS = cloneThread.info.SS
+        outThread.info.EIP = cloneThread.info.EIP
+        outThread.info.EFLAGS = cloneThread.info.EFLAGS
+        outThread.regs = cloneThread.regs
+        outThread.regs.EAX = 0
+        //outThread.fpState = cloneThread.fpState
+    }
+    if outThread.next != nil || outThread.prev != nil {
+        kernelPanic("Uninitialized next and prev")
+    }
+    outThread.info.ESP = uint32(newStack)
+}
 // Need pointer as this function should not do any memory allocations
 func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
     if outDomain == nil || outMainThread == nil {
@@ -80,16 +106,6 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
     outDomain.Segments = defaultUserSegments
     outDomain.MemorySpace = createNewPageDirectory()
     outDomain.CurThread = outMainThread
-
-    outMainThread.domain = outDomain
-    outMainThread.next = outMainThread
-    outMainThread.info.CS = defaultUserSegments.cs | 3
-    outMainThread.info.SS = defaultUserSegments.ss | 3
-    outMainThread.regs.GS = defaultUserSegments.gs | 3
-    outMainThread.regs.FS = defaultUserSegments.fs | 3
-    outMainThread.regs.ES = defaultUserSegments.es | 3
-    outMainThread.regs.DS = defaultUserSegments.ds | 3
-    outMainThread.fpOffset = 0xffffffff
 
     elfHdr, loadAddr, topAddr := LoadElfFile(path, &outDomain.MemorySpace)
 
@@ -106,6 +122,10 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
         outDomain.MemorySpace.mapPage(stack, defaultStackStart-uintptr((i+1)*PAGE_SIZE), PAGE_RW | PAGE_PERM_USER)
         stackPages[i] = stack
     }
+
+    CreateNewThread(outMainThread, defaultStackStart, nil)
+    outDomain.EnqueueThread(outMainThread)
+
 
     var aux [32]auxVecEntry
     nrVec := LoadAuxVector(aux[:], elfHdr, loadAddr)
