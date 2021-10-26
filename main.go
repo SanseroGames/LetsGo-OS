@@ -37,7 +37,6 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
     InitSyscall()
 
     InitPIC()
-    EnableInterrupts()
 
     InitKeyboard()
     InitATA()
@@ -56,7 +55,7 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
 
     for i:=0; i < DOMAINS; i++ {
         var err int
-        err = StartProgram("/usr/hellorust", &domains[i], &threads[i])
+        err = StartProgram("/usr/rustread", &domains[i], &threads[i])
         if err != 0 {
             kernelPanic("Could not start program")
         }

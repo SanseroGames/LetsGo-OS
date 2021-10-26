@@ -11,6 +11,7 @@ func main() {
     fmt.Println("Read test")
     scanner := bufio.NewScanner(os.Stdin)
     for scanner.Scan() {
+        fmt.Println("asdf")
         fmt.Println(scanner.Text()) // Println will add back the final '\n'
     }
     if err := scanner.Err(); err != nil {

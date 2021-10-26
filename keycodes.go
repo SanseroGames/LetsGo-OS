@@ -53,6 +53,9 @@ func translateKeycode(code uint8) uint8 {
         case 0x34: return 0x2e
         case 0x35: return 0x2d
         case 0x39: return 0x20
+
+        case 0x1C: return '\n'
+        case 0x0E: return '\b'
     }
     return 0
 }

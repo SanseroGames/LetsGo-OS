@@ -78,6 +78,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread) {
     outThread.regs.FS = defaultUserSegments.fs | 3
     outThread.regs.ES = defaultUserSegments.es | 3
     outThread.regs.DS = defaultUserSegments.ds | 3
+    outThread.info.EFLAGS = 0x202
     if cloneThread != nil {
         outThread.info.CS = cloneThread.info.CS
         outThread.info.SS = cloneThread.info.SS

@@ -703,15 +703,28 @@ func linuxReadSyscall() uint32 {
         text_mode_print_errorln("Could not look up read addr")
         return ^uint32(syscall.EFAULT)+1
     }
+    count := currentRegs.EDX
+    arr := (*[1 <<30]byte)(unsafe.Pointer(addr))[:count]
     if currentRegs.EBX == 0x42 {
-        arr := (*[1 <<30]byte)(unsafe.Pointer(addr))[:currentRegs.EDX]
         arr[0] = '4'
         arr[1] = '0'
         arr[2] = '9'
         arr[3] = '6'
         return 4
     }
-    return 0
+
+    var num  uint32 = 0
+
+    for buffer.Len() > 0 && num < count {
+        raw_key := buffer.Pop().Keycode
+        pressed := raw_key & 0x80 == 0
+        key := raw_key & 0x7f
+        if pressed {
+            arr[num] = translateKeycode(key)
+            num++
+        }
+    }
+    return num
 }
 
 func linuxFutexSyscall() uint32 {
