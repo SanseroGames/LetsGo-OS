@@ -121,7 +121,7 @@ func defaultHandler(){
 func InitInterrupts(){
     isrBaseAddr := reflect.ValueOf(isrEntryList).Pointer()
     for i := range idtTable {
-        if(i == 2 || i == 15) {continue;}
+        if(i == 2 || i == 15) {continue}
         isrAddr := isrBaseAddr + uintptr(i*23)
         low := uint16(isrAddr)
         high := uint16(uint32(isrAddr)>>16)

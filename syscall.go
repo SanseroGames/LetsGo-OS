@@ -310,6 +310,19 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("getpid syscall")
             }
+            ret = currentDomain.pid
+        }
+        case syscall.SYS_SET_TID_ADDRESS: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("set_tid_address syscall")
+            }
+        }
+        case syscall.SYS_POLL: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("poll syscall")
+            }
         }
         case syscall.SYS_CLONE: {
             if PRINT_SYSCALL {
@@ -617,7 +630,11 @@ func linuxOpenSyscall() uint32 {
 var stop int = 0
 
 func linuxWriteVSyscall() uint32 {
-    // fd := currentRegs.EBX // currently ignored
+    fd := currentRegs.EBX // currently ignored
+    if fd < 1 || fd > 2 {
+        return ^uint32(syscall.EBADF)+1
+    }
+
     addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.ECX))
     count := int(currentRegs.EDX)
     if !ok {
@@ -636,7 +653,11 @@ func linuxWriteVSyscall() uint32 {
         hdr := (*reflect.StringHeader)(unsafe.Pointer(&s)) // case 1
         hdr.Data = uintptr(unsafe.Pointer(uintptr(addr))) // case 6 (this case)
         hdr.Len = int(n.iovLen)
-        text_mode_print(s)
+        if fd == 2 {
+            text_mode_print_error(s)
+        } else {
+            text_mode_print(s)
+        }
         printed += len(s)
     }
     return uint32(printed) //TODO: Return number of bytes written
@@ -644,6 +665,12 @@ func linuxWriteVSyscall() uint32 {
 
 func linuxWriteSyscall() uint32{
     // Not safe
+    fd := currentRegs.EBX
+
+    if fd < 1 || fd > 2 {
+        return ^uint32(syscall.EBADF)+1
+    }
+
     addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.ECX))
     if !ok {
         text_mode_print_errorln("Could not look up string addr")
@@ -662,10 +689,8 @@ func linuxWriteSyscall() uint32{
     //stop++
 
 
-    if len(s) >= 6 && s[0:6] == "panic:"{
-        text_mode_print_errorln("panic:")
-        printRegisters(currentInfo, currentRegs)
-        text_mode_println("")
+    if fd == 2 {
+        text_mode_print_error(s)
     } else {
         text_mode_print(s)
     }

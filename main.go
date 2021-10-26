@@ -56,13 +56,9 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
 
     for i:=0; i < DOMAINS; i++ {
         var err int
-        if i % 0x13 == 0 && false {
-            err = StartProgram("/usr/test", &domains[i], &threads[i])
-        } else {
-            err = StartProgram("/usr/hellogo", &domains[i], &threads[i])
-        }
+        err = StartProgram("/usr/hellorust", &domains[i], &threads[i])
         if err != 0 {
-            kernelPanic("Could not start /usr/test")
+            kernelPanic("Could not start program")
         }
     }
     for i := range domains {
