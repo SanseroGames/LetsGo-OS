@@ -86,6 +86,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread) {
         outThread.regs = cloneThread.regs
         outThread.regs.EAX = 0
         //outThread.fpState = cloneThread.fpState
+        copy(outThread.tlsSegments[TLS_START:], cloneThread.tlsSegments[TLS_START:])
     }
     if outThread.next != nil || outThread.prev != nil {
         kernelPanic("Uninitialized next and prev")
@@ -154,7 +155,6 @@ func InitUserMode(kernelStackStart uintptr) {             // Add usermode code s
     tssIndex := AddSegment(uintptr(unsafe.Pointer(&tss)), unsafe.Sizeof(tss), PRIV_KERNEL | SEG_NORW | TSS_32MODE | SEG_SYSTEM | TSS_IS_TSS, SEG_GRAN_BYTE)
 
 
-    UpdateGdt()
     tss.ss0 = KDS_SELECTOR
     tss.esp0 = uint32(kernelStackStart)
     flushTss(tssIndex*8)

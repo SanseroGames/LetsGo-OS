@@ -112,6 +112,22 @@ const (
     STATX_BASIC_STATS = 0x000007ff	/* The stuff in the normal stat struct */
     STATX_BTIME = 0x00000800	/* Want/got stx_btime */
     STATX_MNT_ID = 0x00001000	/* Got stx_mnt_id */
+
+    FUTEX_WAIT = 0
+    FUTEX_WAKE = 1
+    FUTEX_FD = 2
+    FUTEX_REQUEUE = 3
+    FUTEX_CMP_REQUEUE = 4
+    FUTEX_WAKE_OP = 5
+    FUTEX_LOCK_PI = 6
+    FUTEX_UNLOCK_PI	= 7
+    FUTEX_TRYLOCK_PI = 8
+    FUTEX_WAIT_BITSET = 9
+    FUTEX_WAKE_BITSET = 10
+    FUTEX_WAIT_REQUEUE_PI = 11
+    FUTEX_CMP_REQUEUE_PI = 12
+
+    FUTEX_PRIVATE_FLAG = 128
 )
 
 var (
@@ -184,6 +200,20 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("readlink syscall")
             }
+        }
+        case syscall.SYS_READLINKAT: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("readlinkat syscall")
+            }
+            ret = ^uint32(syscall.EINVAL)+1
+        }
+        case syscall.SYS_FCNTL64: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("fcntl64 syscall")
+            }
+            ret = ^uint32(syscall.EINVAL)+1
 
         }
         case syscall.SYS_SCHED_GETAFFINITY: {
@@ -264,8 +294,8 @@ func linuxSyscallHandler(){
 
         case syscall.SYS_RT_SIGACTION: {
             if PRINT_SYSCALL {
-                printTid()
-                text_mode_println("rt sigaction syscall")
+                //printTid()
+                //text_mode_println("rt sigaction syscall")
             }
         }
         case syscall.SYS_GETTID: {
@@ -293,7 +323,7 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("futex syscall")
             }
-            ret = 0xffffffff
+            ret = linuxFutexSyscall()
         }
         case syscall.SYS_GETEUID32: {
             if PRINT_SYSCALL {
@@ -417,20 +447,20 @@ func linuxUnameSyscall() uint32 {
 func linuxCloneSyscall() uint32 {
     flags := currentRegs.EBX
     stack := currentRegs.ECX
-    parent_tid := currentRegs.EDX
-    tls := currentRegs.ESI
-    child_tid := currentRegs.EDI
-    text_mode_print("flags:")
-    text_mode_print_hex32(flags)
-    text_mode_print(" stack:")
-    text_mode_print_hex32(stack)
-    text_mode_print(" parent:")
-    text_mode_print_hex32(parent_tid)
-    text_mode_print(" tls:")
-    text_mode_print_hex32(tls)
-    text_mode_print(" child:")
-    text_mode_print_hex32(child_tid)
-    text_mode_println("")
+    //parent_tid := currentRegs.EDX
+    //tls := currentRegs.ESI
+    //child_tid := currentRegs.EDI
+    //text_mode_print("flags:")
+    //text_mode_print_hex32(flags)
+    //text_mode_print(" stack:")
+    //text_mode_print_hex32(stack)
+    //text_mode_print(" parent:")
+    //text_mode_print_hex32(parent_tid)
+    //text_mode_print(" tls:")
+    //text_mode_print_hex32(tls)
+    //text_mode_print(" child:")
+    //text_mode_print_hex32(child_tid)
+    //text_mode_println("")
     if flags & _CLONE_THREAD == 0 {
         text_mode_print_errorln("Clone where the goal is not a thread is not supported")
         return ^uint32(syscall.EINVAL)+1
@@ -440,8 +470,9 @@ func linuxCloneSyscall() uint32 {
     Memclr(newThreadMem, PAGE_SIZE)
     newThread := (* thread)(unsafe.Pointer(newThreadMem))
     CreateNewThread(newThread, uintptr(stack), currentDomain.CurThread)
+
     currentDomain.EnqueueThread(newThread)
-    return 1
+    return newThread.tid
 }
 
 func linuxMincoreSyscall() uint32 {
@@ -546,30 +577,22 @@ func linuxSetThreadAreaSyscall() uint32 {
         return  ^uint32(syscall.ENOSYS)+1
     }
 
-    if desc.EntryNumber != 0xffffffff {
-        var s GdtSegment
-        r := GetSegment(int(desc.EntryNumber), &s)
-        if r < 0 || s.access & PRIV_USER == 0{
-            return ^uint32(syscall.EINVAL)+1
+    slot := desc.EntryNumber
+    if slot == 0xffffffff {
+        // Find free slot
+        for i := TLS_START; i < len(currentDomain.CurThread.tlsSegments); i++ {
+            if !currentDomain.CurThread.tlsSegments[i].IsPresent() {
+                slot = uint32(i)
+                break
+            }
         }
-        //regs.GS = desc.EntryNumber*8|3
-        return 0
-        //return ^uint32(syscall.ENOSYS)+1
+        if slot == 0xffffffff {
+            // There was no free slot
+            return ^uint32(syscall.ESRCH)+1
+        }
+        desc.EntryNumber = slot
     }
-    flags := uint8(SEG_GRAN_BYTE)
-    if desc.Flags & UDESC_LIMIT_IN_PAGES != 0 {
-        flags = SEG_GRAN_4K_PAGE
-    }
-    access := uint8(PRIV_USER | SEG_NORMAL)
-    if desc.Flags & UDESC_RX_ONLY != 0{
-        access |= SEG_EXEC
-    } else {
-        access |= SEG_W
-    }
-
-    slot := AddSegment(uintptr(desc.BaseAddr), uintptr(desc.Limit), access,flags)
-    desc.EntryNumber = uint32(slot)
-    UpdateGdt()
+    SetTlsSegment(slot, desc, currentDomain.CurThread.tlsSegments[:])
 
     return 0
 }
@@ -633,10 +656,10 @@ func linuxWriteSyscall() uint32{
     // Test if it is a go panic and print infos to debug:
 
     //prevent stack trace
-    if stop > 10 {
-        return uint32(len(s))
-    }
-    stop++
+    //if stop > 10 {
+    //    return uint32(len(s))
+    //}
+    //stop++
 
 
     if len(s) >= 6 && s[0:6] == "panic:"{
@@ -664,6 +687,71 @@ func linuxReadSyscall() uint32 {
         return 4
     }
     return 0
+}
+
+func linuxFutexSyscall() uint32 {
+    futex_op := currentRegs.ECX
+    val := currentRegs.EDX
+    timeout := currentRegs.ESI
+    //uaddr2 := currentRegs.EDI
+    //val_3 := currentRegs.EBP
+    //text_mode_print("uaddr: ")
+    //text_mode_print_hex32(uaddr)
+    //text_mode_print(" futex_op: ")
+    //text_mode_print_hex32(futex_op)
+    //text_mode_print(" val: ")
+    //text_mode_print_hex32(val)
+    //text_mode_print(" timeout: ")
+    //text_mode_print_hex32(timeout)
+    //text_mode_print(" uaddr2: ")
+    //text_mode_print_hex32(uaddr2)
+    //text_mode_print(" val_3: ")
+    //text_mode_print_hex32(val_3)
+    //text_mode_println("")
+
+    if futex_op & FUTEX_PRIVATE_FLAG == 0 {
+        text_mode_print_error("Futex on shared futexes is not supported")
+        return ^uint32(syscall.ENOSYS)+1
+    }
+
+    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.EBX))
+    if !ok {
+        text_mode_print_errorln("Could not look up read addr")
+        return ^uint32(syscall.EFAULT)+1
+    }
+    futexAddr := (*uint32)(unsafe.Pointer(addr))
+    switch (futex_op & 0xf) {
+        case FUTEX_WAIT:
+            if timeout != 0 {
+                text_mode_print_error("Timeouts are not supported yet")
+                return ^uint32(syscall.ENOSYS)+1
+            }
+            // This should be atomically
+            if val != *futexAddr {
+                return ^uint32(syscall.EAGAIN)+1
+            }
+
+            currentDomain.CurThread.isBlocked = true
+            currentDomain.CurThread.waitAddress = futexAddr
+            return 0
+        case FUTEX_WAKE:
+            var woken uint32 = 0
+            cur := currentDomain.CurThread.next
+            for cur != currentDomain.CurThread && woken < val {
+                if cur.isBlocked && cur.waitAddress == futexAddr {
+                    cur.isBlocked = false
+                    cur.waitAddress = nil
+                    woken++
+                }
+                cur = cur.next
+            }
+            return woken
+        default:
+            text_mode_print_error("Unsupported futex op")
+            text_mode_print_hex32(futex_op)
+            text_mode_println("")
+            return ^uint32(syscall.ENOSYS)+1
+    }
 }
 
 func unsupportedSyscall(){

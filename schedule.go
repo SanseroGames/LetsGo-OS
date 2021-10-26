@@ -55,14 +55,21 @@ type thread struct {
     tid uint32
     StackStart uintptr
 
+    // Currently ignored '^^ I don't have to do it thanks to spurious wakeups
+    isBlocked bool
+    waitAddress *uint32
+
     // Infos to stall a thread when switching
     info InterruptInfo
     regs RegisterState
 
+    // TLS
+    tlsSegments [GDT_ENTRIES]GdtEntry
+
     // fxsave and fxrstor need 512 bytes but 16 byte aligned
     // need space to force alignment if array not aligned
     fpOffset uintptr // should be between 0-15
-    fpState [528]byte
+    fpState [512+16]byte
 }
 
 var (
@@ -99,7 +106,7 @@ func DequeueDomain(d *domain) {
         }
         d.prev.next = d.next
         d.next.prev = d.prev
-        switchToDomain(currentDomain.next)
+        switchToThread(currentDomain.next.CurThread.next)
         return
     }
     // Assume all domains form a circle
@@ -122,26 +129,31 @@ func Schedule() {
     if currentDomain.next == currentDomain && currentDomain.CurThread.next == currentDomain.CurThread {
         return
     }
+    switchToThread(currentDomain.next.CurThread.next)
 
+}
+
+func switchToThread(t *thread) {
+    // Save state of current thread
     addr := uintptr(unsafe.Pointer(&(currentDomain.CurThread.fpState)))
     offset := 16 - (addr % 16)
     currentDomain.CurThread.fpOffset = offset
 
     backupFpRegs(addr + offset)
 
-    //TODO: Make switch to thread (would not work yet)
-    currentDomain.CurThread = currentDomain.CurThread.next
-
-    switchToDomain(currentDomain.next)
-
-}
-
-func switchToDomain(d *domain) {
+    // Switch domain
+    d := t.domain
     currentDomain = d
+
+    // Load next thread
+
+    d.CurThread = t
+
     currentInfo = &(d.CurThread.info)
     currentRegs = &(d.CurThread.regs)
-    addr := uintptr(unsafe.Pointer(&(d.CurThread.fpState)))
-    offset := d.CurThread.fpOffset
+
+    addr = uintptr(unsafe.Pointer(&(d.CurThread.fpState)))
+    offset = d.CurThread.fpOffset
     if offset != 0xffffffff {
         if (addr + offset) % 16 != 0 {
             text_mode_print_hex32(uint32(addr))
@@ -151,6 +163,9 @@ func switchToDomain(d *domain) {
         }
         restoreFpRegs(addr + offset)
     }
+
+    // Load TLS
+    FlushTlsTable(t.tlsSegments[:])
 }
 
 func InitScheduling() {

@@ -14,11 +14,46 @@ type GdtEntry struct {
     baseHigh          uint8
 }
 
+func (e *GdtEntry) IsPresent() bool {
+    return e.access & PRESENT != 0
+}
+
+func (e *GdtEntry) Fill(base uint32, limit uint32, access uint8, flags uint8) {
+    e.limitHighAndFlags = uint8((limit >> 16) & 0x000F)
+    e.limitHighAndFlags |= flags
+    e.access = access
+    e.baseMid = uint8(base >> 16)
+    e.baseHigh = uint8(base >> 24)
+    e.baseLow = uint16(base & 0xFFFF)
+    e.limitLow = uint16(limit  & 0x0000FFFF)
+}
+
+func (e *GdtEntry) Clear() {
+    e.limitHighAndFlags = 0
+    e.access = 0
+    e.baseMid = 0
+    e.baseHigh = 0
+    e.baseLow = 0
+    e.limitLow = 0
+
+}
+
 type GdtSegment struct {
     base uintptr
     limit uintptr
     access uint8
     flags uint8
+}
+
+func (s *GdtSegment) IsPresent() bool {
+    return s.access & PRESENT != 0
+}
+
+func (s *GdtSegment) Clear() {
+    s.base = 0
+    s.limit = 0
+    s.access = 0
+    s.flags = 0
 }
 
 type GdtDescriptor struct {
@@ -32,6 +67,11 @@ type UserDesc struct {
     BaseAddr uint32
     Limit uint32
     Flags uint8
+}
+
+type TlsEntry struct {
+    Desc UserDesc
+    Present bool
 }
 
 const (
@@ -61,6 +101,8 @@ const (
     PRIV_KERNEL = 0 << 5
     PRIV_USER   = 3 << 5
 
+    SEG_BIG_MODE = 1 << 6
+
     PRESENT     = 1 << 7
 
     // userDesc flags
@@ -70,10 +112,14 @@ const (
     UDESC_LIMIT_IN_PAGES = 1 << 4
     UDESC_SEG_NOT_PRESENT = 1 << 5
     UDESC_USABLE = 1 << 6
+
+    // Misc
+    GDT_ENTRIES = 256
+    TLS_START = 16
 )
 
 var (
-    gdtTable = [256]GdtEntry{}
+    gdtTable = [GDT_ENTRIES]GdtEntry{}
     gdtDescriptor GdtDescriptor
     gdtTableLen = 0
 )
@@ -84,6 +130,9 @@ func getGDT() *GdtDescriptor
 
 func InitSegments() {
     var gdtEntry GdtEntry
+
+    Memclr(uintptr(unsafe.Pointer(&gdtTable)), len(gdtTable))
+
     gdtDescriptor = *getGDT()
     oldGdtAddr := uintptr(uint32(gdtDescriptor.GdtAddressLow) |
                     uint32(gdtDescriptor.GdtAddressHigh) << 16)
@@ -94,16 +143,17 @@ func InitSegments() {
 	    Data: oldGdtAddr,
     }))
     copy(gdtTable[:], oldGdt)
-    gdtTableLen += oldGdtLen
-    gdtAddr := uint32(uintptr(unsafe.Pointer(&gdtTable)))
+    gdtAddr := uintptr(unsafe.Pointer(&gdtTable))
     gdtDescriptor.GdtAddressLow = uint16(gdtAddr)
     gdtDescriptor.GdtAddressHigh = uint16(gdtAddr >> 16)
+    gdtDescriptor.GdtSize = GDT_ENTRIES-1
+    gdtTableLen += oldGdtLen
     installGDT(&gdtDescriptor)
     //printGdt(gdtTable[:gdtTableLen])
 }
 
 func GetSegment(index int, res *GdtSegment) int {
-    if index < 0 || index > gdtTableLen { return -1 }
+    if index < 0 || index > len(gdtTable) { return -1 }
     (*res).limit = uintptr(gdtTable[index].limitLow)
     (*res).limit += uintptr((gdtTable[index].limitHighAndFlags & 0xF)) << 16
     (*res).base = uintptr(gdtTable[index].baseLow)
@@ -116,26 +166,67 @@ func GetSegment(index int, res *GdtSegment) int {
 }
 
 func AddSegment(base uintptr, limit uintptr, access uint8, flags uint8) int {
-    gdtTable[gdtTableLen].limitHighAndFlags = uint8((limit >> 16) & 0x000F)
+    if gdtTableLen < 0 || gdtTableLen > TLS_START { return -1 }
+    doUpdateSegment(gdtTableLen, base, limit, access, flags)
+    gdtTableLen++
+    return gdtTableLen-1
+}
+
+func UpdateSegment(index int, base uintptr, limit uintptr, access uint8, flags uint8) bool {
+    if index < 0 || index > gdtTableLen { return false }
+    doUpdateSegment(index, base, limit, access, flags)
+    return true
+}
+
+// Does not check if index in range
+func doUpdateSegment(index int, base uintptr, limit uintptr, access uint8, flags uint8) {
+    gdtTable[index].limitHighAndFlags = uint8((limit >> 16) & 0x000F)
     bigMode := uint8(0)
 
     if access & SEG_NORMAL != 0 {
         bigMode = 1 << 6
     }
-    gdtTable[gdtTableLen].limitHighAndFlags |= flags | bigMode
-    gdtTable[gdtTableLen].access = access | PRESENT
-    gdtTable[gdtTableLen].baseMid = uint8(base >> 16)
-    gdtTable[gdtTableLen].baseHigh = uint8(base >> 24)
+    gdtTable[index].limitHighAndFlags |= flags | bigMode
+    gdtTable[index].access = access | PRESENT
+    gdtTable[index].baseMid = uint8(base >> 16)
+    gdtTable[index].baseHigh = uint8(base >> 24)
 
-    gdtTable[gdtTableLen].baseLow = uint16(base & 0xFFFF)
-    gdtTable[gdtTableLen].limitLow = uint16(limit  & 0x0000FFFF)
-    gdtTableLen++
-    return gdtTableLen-1
+    gdtTable[index].baseLow = uint16(base & 0xFFFF)
+    gdtTable[index].limitLow = uint16(limit  & 0x0000FFFF)
+
 }
 
-func UpdateGdt(){
-    gdtDescriptor.GdtSize = uint16(gdtTableLen*8 - 1)
-    installGDT(&gdtDescriptor)
+func SetTlsSegment(index uint32, desc *UserDesc, table []GdtEntry) bool {
+    if index < TLS_START || index > uint32(len(gdtTable)) { return false }
+
+    if desc.Flags == UDESC_RX_ONLY | UDESC_SEG_NOT_PRESENT {
+        // Desc is considered emtpy. Clear entry
+        table[index].Clear()
+        return true
+    }
+
+    flags := uint8(SEG_GRAN_BYTE)
+    if desc.Flags & UDESC_LIMIT_IN_PAGES != 0 {
+        flags = SEG_GRAN_4K_PAGE
+    }
+    access := uint8(PRIV_USER | SEG_NORMAL | PRESENT)
+    if desc.Flags & UDESC_RX_ONLY != 0{
+        access |= SEG_EXEC
+    } else {
+        access |= SEG_W
+    }
+    if access & SEG_NORMAL != 0 {
+        flags |= SEG_BIG_MODE
+    }
+
+    table[index].Fill(desc.BaseAddr, desc.Limit, access, flags)
+    FlushTlsTable(table)
+
+    return true
+}
+
+func FlushTlsTable(table []GdtEntry) {
+    copy(gdtTable[TLS_START:], table[TLS_START:])
 }
 
 func printGdt(gdt []GdtEntry){

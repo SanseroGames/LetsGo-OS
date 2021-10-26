@@ -5,5 +5,6 @@ import (
 )
 
 func main() {
-    fmt.Printf("Hello go world")
+    defer fmt.Println("I can use go features")
+    fmt.Println("Hello go world")
 }

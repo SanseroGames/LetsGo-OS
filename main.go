@@ -59,7 +59,7 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
         if i % 0x13 == 0 && false {
             err = StartProgram("/usr/test", &domains[i], &threads[i])
         } else {
-            err = StartProgram("/usr/statx", &domains[i], &threads[i])
+            err = StartProgram("/usr/hellogo", &domains[i], &threads[i])
         }
         if err != 0 {
             kernelPanic("Could not start /usr/test")
