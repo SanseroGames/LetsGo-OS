@@ -5,12 +5,20 @@ import (
     "reflect"
 )
 
-const DOMAINS = 0x1
+var progs = [...]string {
+    "/usr/hellogo",
+    "/usr/helloc",
+    "/usr/hellorust",
+    "/usr/hellogo",
+    "/usr/hellorust",
+    "/usr/readtest",
+    "/usr/rustread",
+    "/usr/rustread",
+    "/usr/rustread",
+}
 
-var domains [DOMAINS]domain
-var threads [DOMAINS]thread
-
-func goEntry()
+var domains [len(progs)]domain
+var threads [len(progs)]thread
 
 func main()
 
@@ -26,7 +34,7 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
     text_mode_println(s)
     text_mode_println(s2)
     text_mode_println(s3)
-    text_mode_print_char(0x0a)
+    text_mode_println("")
 
     InitSegments()
 
@@ -38,6 +46,7 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
 
     InitPIC()
 
+    InitPit()
     InitKeyboard()
     InitATA()
 
@@ -48,41 +57,43 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
 
     InitUserMode(stackstart)
 
-    InitShell()
-
     text_mode_println_col("Initilaization complete", 0x2)
     //HdReadSector()
 
-    for i:=0; i < DOMAINS; i++ {
-        var err int
-        err = StartProgram("/usr/rustread", &domains[i], &threads[i])
+    var err int
+    for i :=0; i < len(progs); i++ {
+        err = StartProgram(progs[i], &domains[i], &threads[i])
         if err != 0 {
             kernelPanic("Could not start program")
         }
     }
+
     for i := range domains {
-        EnqueueDomain(&domains[i])
+        AddDomain(&domains[i])
     }
 
-    currentDomain = &domains[0x0]
-    switchPageDir(currentDomain.MemorySpace.PageDirectory)
-    JumpUserMode(currentDomain.CurThread.regs, currentDomain.CurThread.info)
+    if currentThread == nil {
+        kernelPanic("I expect AddDomain to set currentThread variable")
+    }
+    switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
+    JumpUserMode(currentThread.regs, currentThread.info)
     kernelPanic("Could not jump to user space :/")
+
 }
 
 func gpfPanic(){
     text_mode_print_char(0xa)
     text_mode_print_errorln("Received General Protection fault. Disabling Interrupts and halting")
     text_mode_print("Domain ID: ")
-    text_mode_print_hex(uint8(currentDomain.pid))
+    text_mode_print_hex(uint8(currentThread.domain.pid))
     text_mode_println("")
     text_mode_print("Thread ID: ")
-    text_mode_print_hex(uint8(currentDomain.CurThread.tid))
+    text_mode_print_hex(uint8(currentThread.tid))
     text_mode_println("")
     text_mode_print("Errorcode: ")
-    text_mode_print_hex32(currentInfo.ExceptionCode)
+    text_mode_print_hex32(currentThread.info.ExceptionCode)
     text_mode_println("")
-    panicHelper(currentInfo, currentRegs)
+    panicHelper(&currentThread.info, &currentThread.regs)
 }
 
 func panicHelper(info *InterruptInfo, regs *RegisterState){
@@ -94,7 +105,9 @@ func panicHelper(info *InterruptInfo, regs *RegisterState){
 func kernelPanic(msg string) {
     text_mode_print_errorln(msg)
     text_mode_print_errorln("kernel panic :(")
-    printTid()
+    if currentThread != nil {
+        printTid()
+    }
     DisableInterrupts()
     Hlt()
 }
@@ -127,9 +140,9 @@ func printRegisters(info *InterruptInfo, regs *RegisterState){
 
 func printTid() {
     text_mode_print("pid: ")
-    text_mode_print_hex(uint8(currentDomain.pid))
+    text_mode_print_hex(uint8(currentThread.domain.pid))
     text_mode_print(" tid: ")
-    text_mode_print_hex(uint8(currentDomain.CurThread.tid))
+    text_mode_print_hex(uint8(currentThread.tid))
     text_mode_print(" ")
 }
 

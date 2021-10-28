@@ -1,4 +1,5 @@
 use std::io;
+use std::process;
 
 
 fn main() -> io::Result<()> {
@@ -12,6 +13,7 @@ fn main() -> io::Result<()> {
                 total += (i * j) + (i * j);
             };
         };
+        println!("My pid is {}", process::id());
         println!("The total is {:?}", total);
         println!("{}", buffer);
     }

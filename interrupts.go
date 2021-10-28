@@ -55,10 +55,6 @@ var (
     idtTable = [256]IdtEntry{}
     idtDescriptor IdtDescriptor = IdtDescriptor{}
     handlers [256]InterruptHandler
-
-    // Convenience variables that always point to the fields of currentDomain.CurThread
-    currentInfo *InterruptInfo
-    currentRegs *RegisterState
 )
 
 func isrVector()
@@ -83,17 +79,15 @@ func do_isr(regs RegisterState, info InterruptInfo){
 
     switchPageDir(kernelMemSpace.PageDirectory)
 
-    currentDomain.CurThread.info = info
-    currentDomain.CurThread.regs = regs
-    currentInfo = &(currentDomain.CurThread.info)
-    currentRegs = &(currentDomain.CurThread.regs)
+    currentThread.info = info
+    currentThread.regs = regs
     handlers[info.InterruptNumber]()
     Schedule()
 
-    info = currentDomain.CurThread.info
-    regs = currentDomain.CurThread.regs
+    info = currentThread.info
+    regs = currentThread.regs
 
-    switchPageDir(currentDomain.MemorySpace.PageDirectory)
+    switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
 }
 
 func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8){
@@ -107,13 +101,13 @@ func defaultHandler(){
     text_mode_print_char(0xa)
     text_mode_print_errorln("Unhandled interrupt! Disabling Interrupt and halting!")
     text_mode_print("Interrupt number: ")
-    text_mode_print_hex(uint8(currentInfo.InterruptNumber))
+    text_mode_print_hex(uint8(currentThread.info.InterruptNumber))
     text_mode_print_char(0xa)
     text_mode_print("Exception code: ")
-    text_mode_print_hex32(currentInfo.ExceptionCode)
+    text_mode_print_hex32(currentThread.info.ExceptionCode)
     text_mode_print_char(0xa)
     text_mode_print("EIP: ")
-    text_mode_print_hex32(currentInfo.EIP)
+    text_mode_print_hex32(currentThread.info.EIP)
     DisableInterrupts()
     Hlt()
 }

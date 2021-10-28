@@ -102,7 +102,6 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
     }
     outDomain.Segments = defaultUserSegments
     outDomain.MemorySpace = createNewPageDirectory()
-    outDomain.CurThread = outMainThread
 
     elfHdr, loadAddr, topAddr := LoadElfFile(path, &outDomain.MemorySpace)
 
@@ -121,7 +120,7 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
     }
 
     CreateNewThread(outMainThread, defaultStackStart, nil)
-    outDomain.EnqueueThread(outMainThread)
+    outDomain.AddThread(outMainThread)
 
 
     var aux [32]auxVecEntry

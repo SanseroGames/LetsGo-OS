@@ -143,28 +143,35 @@ var (
 
 func linuxSyscallHandler(){
     var ret uint32 = 0
-    switch (currentRegs.EAX) {
+    syscallNr := currentThread.regs.EAX
+    arg1 := currentThread.regs.EBX
+    arg2 := currentThread.regs.ECX
+    arg3 := currentThread.regs.EDX
+    arg4 := currentThread.regs.ESI
+    arg5 := currentThread.regs.EDI
+    arg6 := currentThread.regs.EBP
+    switch (syscallNr) {
         case syscall.SYS_WRITE: {
             // Linux write syscall
             if PRINT_SYSCALL {
                 printTid()
                 text_mode_println("write syscall")
             }
-            ret = linuxWriteSyscall()
+            ret = linuxWriteSyscall(arg1, arg2, arg3)
         }
         case syscall.SYS_WRITEV: {
             if PRINT_SYSCALL {
                 printTid()
                 text_mode_println("writeV syscall")
             }
-            ret = linuxWriteVSyscall()
+            ret = linuxWriteVSyscall(arg1, arg2, arg3)
         }
         case syscall.SYS_SET_THREAD_AREA: {
             if PRINT_SYSCALL {
                 printTid()
                 text_mode_println("set thread area syscall")
             }
-            ret = linuxSetThreadAreaSyscall()
+            ret = linuxSetThreadAreaSyscall(arg1)
         }
         case syscall.SYS_OPEN: {
             if PRINT_SYSCALL {
@@ -172,12 +179,12 @@ func linuxSyscallHandler(){
                 text_mode_println("open syscall")
             }
 
-            ret = linuxOpenSyscall()
+            ret = linuxOpenSyscall(arg1, arg2)
         }
         case syscall.SYS_OPENAT: {
             if PRINT_SYSCALL {
                 printTid()
-                text_mode_println("open syscall")
+                text_mode_println("openat syscall")
             }
 
             ret = ^uint32(syscall.ENOSYS)+1
@@ -193,7 +200,7 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("read syscall")
             }
-            ret = linuxReadSyscall()
+            ret = linuxReadSyscall(arg1, arg2, arg3)
         }
         case syscall.SYS_READLINK: {
             if PRINT_SYSCALL {
@@ -234,7 +241,7 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("exit group syscall")
             }
-            ret = linuxExitGroupSyscall()
+            ret = linuxExitGroupSyscall(arg1)
         }
         case syscall.SYS_EXIT: {
             if PRINT_SYSCALL {
@@ -248,28 +255,28 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("brk syscall")
             }
-            ret = linuxBrkSyscall()
+            ret = linuxBrkSyscall(arg1)
         }
         case syscall.SYS_MMAP2: {
             if PRINT_SYSCALL {
                 printTid()
                 text_mode_println("mmap2 syscall")
             }
-            ret = linuxMmap2Syscall()
+            ret = linuxMmap2Syscall(arg1, arg2, arg3)
         }
         case syscall.SYS_MINCORE: {
             if PRINT_SYSCALL {
                 printTid()
                 text_mode_println("mincore syscall")
             }
-            ret = linuxMincoreSyscall()
+            ret = linuxMincoreSyscall(arg1, arg2, arg3)
         }
         case syscall.SYS_MUNMAP: {
             if PRINT_SYSCALL {
                 printTid()
                 text_mode_println("munmap syscall")
             }
-            ret = linuxMunmapSyscall()
+            ret = linuxMunmapSyscall(arg1, arg2)
         }
         case syscall.SYS_CLOCK_GETTIME: {
             if PRINT_SYSCALL {
@@ -303,14 +310,14 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("gettid syscall")
             }
-            ret = currentDomain.CurThread.tid
+            ret = currentThread.tid
         }
         case syscall.SYS_GETPID: {
             if PRINT_SYSCALL {
                 printTid()
                 text_mode_println("getpid syscall")
             }
-            ret = currentDomain.pid
+            ret = currentThread.domain.pid
         }
         case syscall.SYS_SET_TID_ADDRESS: {
             if PRINT_SYSCALL {
@@ -329,14 +336,20 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("clone syscall")
             }
-            ret = linuxCloneSyscall()
+            ret = linuxCloneSyscall(arg1, arg2)
         }
         case syscall.SYS_FUTEX: {
             if PRINT_SYSCALL {
                 printTid()
                 text_mode_println("futex syscall")
             }
-            ret = linuxFutexSyscall()
+            ret = linuxFutexSyscall(arg1, arg2, arg3, arg4, arg5, arg6)
+        }
+        case syscall.SYS_SCHED_YIELD: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("sched yield syscall")
+            }
         }
         case syscall.SYS_GETEUID32: {
             if PRINT_SYSCALL {
@@ -370,7 +383,7 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("uname syscall")
             }
-            ret = linuxUnameSyscall()
+            ret = linuxUnameSyscall(arg1)
         }
         case syscall.SYS_TGKILL: {
             if PRINT_SYSCALL {
@@ -392,7 +405,7 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("statx syscall")
             }
-            ret = linuxStatxSyscall()
+            ret = linuxStatxSyscall(arg1, arg2, arg3, arg4, arg5)
         }
         // __NR_arch_prctl
         case 0x180: {
@@ -400,27 +413,27 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("arch_prctl")
             }
-            //printRegisters(currentInfo, currentRegs)
+            //printRegisters(currentInfo, currentThread.regs)
             ret = ^uint32(syscall.EINVAL)+1
             //ret = linuxSetThreadAreaSyscall()
         }
 
         default: unsupportedSyscall()
     }
-    currentRegs.EAX = ret
+    currentThread.regs.EAX = ret
 }
 
-func linuxExitGroupSyscall() uint32 {
+func linuxExitGroupSyscall(status uint32) uint32 {
     //text_mode_print("Exiting domain ")
-    //text_mode_print_hex(uint8(currentDomain.pid))
+    //text_mode_print_hex(uint8(currentThread.domain.pid))
     //text_mode_println("")
-    DequeueDomain(currentDomain)
+    ExitDomain(currentThread.domain)
     // Already in new context so return value from last syscall from current domain
-    return currentRegs.EAX
+    return currentThread.regs.EAX
 }
 
-func linuxStatxSyscall() uint32 {
-    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.EDI))
+func linuxStatxSyscall(dirfd uint32, path uint32, flags uint32, mask uint32, buf uint32, ) uint32 {
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(buf))
     if !ok {
         text_mode_print_errorln("invalid adress in statx")
         return ^uint32(syscall.EFAULT)+1
@@ -446,8 +459,8 @@ func linuxStatxSyscall() uint32 {
     return 0
 }
 
-func linuxUnameSyscall() uint32 {
-    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.EBX))
+func linuxUnameSyscall(buf uint32) uint32 {
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(buf))
     if !ok {
         text_mode_print_errorln("invalid adress in uname")
         return ^uint32(syscall.EFAULT)+1
@@ -457,12 +470,10 @@ func linuxUnameSyscall() uint32 {
     return 0
 }
 
-func linuxCloneSyscall() uint32 {
-    flags := currentRegs.EBX
-    stack := currentRegs.ECX
-    //parent_tid := currentRegs.EDX
-    //tls := currentRegs.ESI
-    //child_tid := currentRegs.EDI
+func linuxCloneSyscall(flags uint32, stack uint32) uint32 {
+    //parent_tid := currentThread.regs.EDX
+    //tls := currentThread.regs.ESI
+    //child_tid := currentThread.regs.EDI
     //text_mode_print("flags:")
     //text_mode_print_hex32(flags)
     //text_mode_print(" stack:")
@@ -482,51 +493,49 @@ func linuxCloneSyscall() uint32 {
     newThreadMem := allocPage()
     Memclr(newThreadMem, PAGE_SIZE)
     newThread := (* thread)(unsafe.Pointer(newThreadMem))
-    CreateNewThread(newThread, uintptr(stack), currentDomain.CurThread)
+    CreateNewThread(newThread, uintptr(stack), currentThread)
 
-    currentDomain.EnqueueThread(newThread)
+    currentThread.domain.AddThread(newThread)
     return newThread.tid
 }
 
-func linuxMincoreSyscall() uint32 {
+func linuxMincoreSyscall(addr uint32, length uint32, vec uint32) uint32 {
     //text_mode_print(" addr: ")
-    //text_mode_print_hex32(currentRegs.EBX)
+    //text_mode_print_hex32(currentThread.regs.EBX)
     //text_mode_print(" length: ")
-    //text_mode_print_hex32(currentRegs.ECX)
+    //text_mode_print_hex32(currentThread.regs.ECX)
     //text_mode_print(" vec: ")
-    //text_mode_print_hex32(currentRegs.EDX)
+    //text_mode_print_hex32(currentThread.regs.EDX)
     //text_mode_println("")
-    //addr := currentRegs.EBX
-    length := currentRegs.ECX
-    vec, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.EDX))
+    //addr := currentThread.regs.EBX
+    vecAddr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(vec))
     if !ok {
         text_mode_print_errorln("Could not look up vec array")
         return ^uint32(syscall.EFAULT)+1
     }
 
-    arr := (*[30 << 1]byte)(unsafe.Pointer(vec))[:(length+PAGE_SIZE-1) / PAGE_SIZE]
+    arr := (*[30 << 1]byte)(unsafe.Pointer(vecAddr))[:(length+PAGE_SIZE-1) / PAGE_SIZE]
     for i := range arr {
         arr[i] = 1
     }
     return 0
 }
 
-func linuxMunmapSyscall() uint32 {
+func linuxMunmapSyscall(baseAddr uint32, length uint32) uint32 {
     //printRegisters(currentInfo, regs)
-    for i:= uint32(0); i < currentRegs.ECX; i += PAGE_SIZE {
-        addr := uintptr(currentRegs.EBX + i)
+    for i:= uint32(0); i < length; i += PAGE_SIZE {
+        addr := uintptr(baseAddr + i)
 
         if addr < KERNEL_RESERVED {
             return ^uint32(syscall.EINVAL)+1
         }
-        currentDomain.MemorySpace.unMapPage(addr)
+        currentThread.domain.MemorySpace.unMapPage(addr)
     }
     return 0
 }
 
-func linuxBrkSyscall() uint32 {
-    newBrk := currentRegs.EBX
-    brk := uint32(currentDomain.MemorySpace.Brk)
+func linuxBrkSyscall(newBrk uint32) uint32 {
+    brk := uint32(currentThread.domain.MemorySpace.Brk)
     if newBrk == 0 {
         return brk
     }
@@ -538,32 +547,29 @@ func linuxBrkSyscall() uint32 {
         p := allocPage()
         Memclr(p, PAGE_SIZE)
         flags := uint8(PAGE_PERM_USER | PAGE_RW)
-        currentDomain.MemorySpace.mapPage(p, uintptr(i), flags)
+        currentThread.domain.MemorySpace.mapPage(p, uintptr(i), flags)
     }
-    currentDomain.MemorySpace.Brk = uintptr(newBrk)
+    currentThread.domain.MemorySpace.Brk = uintptr(newBrk)
     return newBrk
 }
 
-func linuxMmap2Syscall() uint32 {
-    target := currentRegs.EBX
-    size := currentRegs.ECX
-    prot := currentRegs.EDX
+func linuxMmap2Syscall(target uint32, size uint32, prot uint32) uint32 {
     if target == 0 {
-        target = uint32(currentDomain.MemorySpace.VmTop)
+        target = uint32(currentThread.domain.MemorySpace.VmTop)
     }
     if prot == 0 {
-        return uint32(currentDomain.MemorySpace.VmTop)
+        return uint32(currentThread.domain.MemorySpace.VmTop)
     }
     //text_mode_print("vmtop: ")
-    //text_mode_print_hex32(uint32(currentDomain.MemorySpace.VmTop))
+    //text_mode_print_hex32(uint32(currentThread.domain.MemorySpace.VmTop))
     //text_mode_print(" target: ")
-    //text_mode_print_hex32(currentRegs.EBX)
+    //text_mode_print_hex32(currentThread.regs.EBX)
     //text_mode_print(" size: ")
     //text_mode_print_hex32(size)
     //text_mode_print(" prot: ")
-    //text_mode_print_hex32(currentRegs.EDX)
+    //text_mode_print_hex32(currentThread.regs.EDX)
     //text_mode_print(" flags: ")
-    //text_mode_print_hex32(currentRegs.ESI)
+    //text_mode_print_hex32(currentThread.regs.ESI)
     //text_mode_println("")
     for i:=uint32(0); i < size; i+=PAGE_SIZE {
         p := allocPage()
@@ -572,14 +578,14 @@ func linuxMmap2Syscall() uint32 {
         if(target+i < KERNEL_RESERVED){
             return ^uint32(syscall.EINVAL)+1
         }
-        currentDomain.MemorySpace.mapPage(p, uintptr(target+i), flags)
+        currentThread.domain.MemorySpace.mapPage(p, uintptr(target+i), flags)
     }
     //text_mode_print_hex32(target)
     return target
 }
 
-func linuxSetThreadAreaSyscall() uint32 {
-    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.EBX))
+func linuxSetThreadAreaSyscall(u_info uint32) uint32 {
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(u_info))
     if !ok {
         text_mode_print_errorln("Could not look up user desc")
         return ^uint32(syscall.EFAULT)+1
@@ -593,8 +599,8 @@ func linuxSetThreadAreaSyscall() uint32 {
     slot := desc.EntryNumber
     if slot == 0xffffffff {
         // Find free slot
-        for i := TLS_START; i < len(currentDomain.CurThread.tlsSegments); i++ {
-            if !currentDomain.CurThread.tlsSegments[i].IsPresent() {
+        for i := TLS_START; i < len(currentThread.tlsSegments); i++ {
+            if !currentThread.tlsSegments[i].IsPresent() {
                 slot = uint32(i)
                 break
             }
@@ -605,50 +611,41 @@ func linuxSetThreadAreaSyscall() uint32 {
         }
         desc.EntryNumber = slot
     }
-    SetTlsSegment(slot, desc, currentDomain.CurThread.tlsSegments[:])
+    SetTlsSegment(slot, desc, currentThread.tlsSegments[:])
 
     return 0
 }
 
-func linuxOpenSyscall() uint32 {
-    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.EBX))
+func linuxOpenSyscall(path uint32, flags uint32) uint32 {
+    _, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(flags))
     if !ok {
         return ^uint32(syscall.EFAULT)+1
     }
-    s := cstring(addr)
+    //s := cstring(addr)
     //text_mode_println(s)
-    if s == "/sys/kernel/mm/transparent_hugepage/hpage_pmd_size" && false {
-        text_mode_println("reading page size")
-        currentRegs.EAX = 0x42
-        //kernelPanic()
-    }
     return ^uint32(syscall.ENOSYS)+1
     //printRegisters(currentInfo, regs)
 
 }
 
-var stop int = 0
-
-func linuxWriteVSyscall() uint32 {
-    fd := currentRegs.EBX // currently ignored
+func linuxWriteVSyscall(fd uint32, arr uint32, count uint32) uint32 {
     if fd < 1 || fd > 2 {
         return ^uint32(syscall.EBADF)+1
     }
 
-    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.ECX))
-    count := int(currentRegs.EDX)
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(arr))
     if !ok {
         text_mode_print_errorln("Could not look up string addr")
         return ^uint32(syscall.EFAULT)+1
     }
     iovecs := *(*[]ioVec)(unsafe.Pointer(&reflect.SliceHeader{
-        Len:  count,
-	    Cap:  count,
+        Len:  int(count),
+	    Cap:  int(count),
 	    Data: addr,
     }))
     printed := 0
     for _,n := range iovecs {
-        addr, ok = currentDomain.MemorySpace.getPhysicalAddress(uintptr(n.iovBase))
+        addr, ok = currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(n.iovBase))
         var s string
         hdr := (*reflect.StringHeader)(unsafe.Pointer(&s)) // case 1
         hdr.Data = uintptr(unsafe.Pointer(uintptr(addr))) // case 6 (this case)
@@ -663,15 +660,12 @@ func linuxWriteVSyscall() uint32 {
     return uint32(printed) //TODO: Return number of bytes written
 }
 
-func linuxWriteSyscall() uint32{
-    // Not safe
-    fd := currentRegs.EBX
-
+func linuxWriteSyscall(fd uint32, text uint32, length uint32) uint32{
     if fd < 1 || fd > 2 {
         return ^uint32(syscall.EBADF)+1
     }
 
-    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.ECX))
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(text))
     if !ok {
         text_mode_print_errorln("Could not look up string addr")
         return ^uint32(syscall.EFAULT)+1
@@ -679,7 +673,7 @@ func linuxWriteSyscall() uint32{
     var s string
     hdr := (*reflect.StringHeader)(unsafe.Pointer(&s)) // case 1
     hdr.Data = uintptr(unsafe.Pointer(uintptr(addr))) // case 6 (this case)
-    hdr.Len = int(currentRegs.EDX)
+    hdr.Len = int(length)
     // Test if it is a go panic and print infos to debug:
 
     //prevent stack trace
@@ -697,21 +691,13 @@ func linuxWriteSyscall() uint32{
     return uint32(len(s)) //TODO: nr of bytes written
 }
 
-func linuxReadSyscall() uint32 {
-    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.ECX))
+func linuxReadSyscall(fd uint32, buf uint32, count uint32) uint32 {
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(buf))
     if !ok {
         text_mode_print_errorln("Could not look up read addr")
         return ^uint32(syscall.EFAULT)+1
     }
-    count := currentRegs.EDX
     arr := (*[1 <<30]byte)(unsafe.Pointer(addr))[:count]
-    if currentRegs.EBX == 0x42 {
-        arr[0] = '4'
-        arr[1] = '0'
-        arr[2] = '9'
-        arr[3] = '6'
-        return 4
-    }
 
     var num  uint32 = 0
 
@@ -727,12 +713,7 @@ func linuxReadSyscall() uint32 {
     return num
 }
 
-func linuxFutexSyscall() uint32 {
-    futex_op := currentRegs.ECX
-    val := currentRegs.EDX
-    timeout := currentRegs.ESI
-    //uaddr2 := currentRegs.EDI
-    //val_3 := currentRegs.EBP
+func linuxFutexSyscall(uaddr uint32, futex_op uint32, val uint32, timeout uint32, uaddr2 uint32, val_3 uint32) uint32 {
     //text_mode_print("uaddr: ")
     //text_mode_print_hex32(uaddr)
     //text_mode_print(" futex_op: ")
@@ -752,7 +733,7 @@ func linuxFutexSyscall() uint32 {
         return ^uint32(syscall.ENOSYS)+1
     }
 
-    addr, ok := currentDomain.MemorySpace.getPhysicalAddress(uintptr(currentRegs.EBX))
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(uaddr))
     if !ok {
         text_mode_print_errorln("Could not look up read addr")
         return ^uint32(syscall.EFAULT)+1
@@ -769,13 +750,13 @@ func linuxFutexSyscall() uint32 {
                 return ^uint32(syscall.EAGAIN)+1
             }
 
-            currentDomain.CurThread.isBlocked = true
-            currentDomain.CurThread.waitAddress = futexAddr
+            currentThread.isBlocked = true
+            currentThread.waitAddress = futexAddr
             return 0
         case FUTEX_WAKE:
             var woken uint32 = 0
-            cur := currentDomain.CurThread.next
-            for cur != currentDomain.CurThread && woken < val {
+            cur := currentThread.next
+            for cur != currentThread && woken < val {
                 if cur.isBlocked && cur.waitAddress == futexAddr {
                     cur.isBlocked = false
                     cur.waitAddress = nil
@@ -795,7 +776,7 @@ func linuxFutexSyscall() uint32 {
 func unsupportedSyscall(){
     text_mode_print_char(0xa)
     text_mode_print_errorln("Unsupported Linux Syscall received! Disabling Interrupts and halting")
-    panicHelper(currentInfo, currentRegs)
+    panicHelper(&currentThread.info, &currentThread.regs)
 }
 
 func InitSyscall() {
