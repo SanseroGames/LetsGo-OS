@@ -89,7 +89,7 @@ func text_mode_print_char(char uint8){
 
 func text_mode_print_char_col(char uint8, attr uint8){
     text_mode_check_fb_move()
-    if(char == 0x0a){
+    if(char == '\n'){
         fbCurLine++
         fbCurCol=0
         text_mode_check_fb_move()
@@ -99,6 +99,8 @@ func text_mode_print_char_col(char uint8, attr uint8){
         if fbCurCol < 0 {
             fbCurCol = 0
         }
+    } else if char == '\r' {
+        fbCurCol = 0
     } else {
         if(fbCurCol>=fbWidth){ return }
         fb[fbCurCol+fbCurLine*fbWidth] = uint16(attr)<<8 | uint16(char)

@@ -15,7 +15,7 @@ GOARCH := 386
 GOROOT := $(shell go env GOROOT)
 ARCH := x86
 
-
+RUST_TARGET := i686-unknown-linux-musl
 
 LD_FLAGS := -n -melf_i386 -T arch/$(ARCH)/script/linker.ld -static --no-ld-generated-unwind-info
 AS_FLAGS := -g -f elf32 -F dwarf -I arch/$(ARCH)/asm/
@@ -33,8 +33,8 @@ usr_go_apps_src := $(wildcard usr/*/main.go)
 usr_go_apps_obj := $(patsubst usr/%/main.go, $(USR_BUILD_DIR)/%.o, $(usr_go_apps_src))
 usr_c_apps_src := $(wildcard usr/*/main.c)
 usr_c_apps_obj := $(patsubst usr/%/main.c, $(USR_BUILD_DIR)/%.o, $(usr_c_apps_src))
-usr_rust_apps_src := $(wildcard usr/*/main.rs)
-usr_rust_apps_obj := $(patsubst usr/%/main.rs, $(USR_BUILD_DIR)/%.o, $(usr_rust_apps_src))
+usr_rust_apps_src := $(wildcard usr/*/Cargo.toml)
+usr_rust_apps_obj := $(patsubst usr/%/Cargo.toml, $(USR_BUILD_DIR)/%.o, $(usr_rust_apps_src))
 
 .PHONY: kernel usr iso
 
@@ -48,9 +48,10 @@ $(USR_BUILD_DIR)/%.o: usr/%/main.go
 	@echo "[go] Building $@ (from $<)"
 	@GOARCH=$(GOARCH) GOOS=$(GOOS) go build -o $(USR_BUILD_DIR)/$(basename $(notdir $@)) $<
 
-$(USR_BUILD_DIR)/%.o: usr/%/main.rs
+$(USR_BUILD_DIR)/%.o: usr/%/Cargo.toml
 	@echo "[Rust] Building $@ (from $<)"
-	@rustc --target=i686-unknown-linux-musl -o $(USR_BUILD_DIR)/$(basename $(notdir $@)) $<
+	@cargo build --target=${RUST_TARGET} --manifest-path $<
+	@cp $(dir $<)/target/${RUST_TARGET}/debug/$(basename $(notdir $@)) $(USR_BUILD_DIR)/$(basename $(notdir $@))
 
 $(USR_BUILD_DIR)/%.o: usr/%/main.c
 	@echo "[CC] Building $@ (from $<)"
@@ -61,7 +62,7 @@ usr: $(usr_go_apps_obj) $(usr_c_apps_obj) $(usr_rust_apps_obj)
 go.o:
 	@mkdir -p $(BUILD_DIR)
 
-	@echo "[go] compiling go sources into a standalone .o file"
+	@echo "[go] compiling go kernel sources into a standalone .o file"
 	@# build/go.o is a elf32 object file but all Go symbols are unexported. Our
 	@# asm entrypoint code needs to know the address to 'main.main' and 'runtime.g0'
 	@# so we use objcopy to globalize them
@@ -106,7 +107,6 @@ gdb: iso
 	echo $(GOROOT)
 	gdb \
 	    -ex 'add-auto-load-safe-path $(pwd)' \
-	    -ex 'set disassembly-flavor intel' \
 		-ex 'set arch i386:intel' \
 	    -ex 'file $(kernel_target)' \
 	    -ex 'target remote localhost:1234' \

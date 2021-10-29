@@ -134,7 +134,7 @@ var (
     uts = utsname{
         sysname: [_UTSNAME_LENGTH]byte{'L','e','t','\'','s','G','o','!',' ','O','S',0},
         nodename: [_UTSNAME_LENGTH]byte{0},
-        release: [_UTSNAME_LENGTH]byte{'4','2','0','.','6','9','.','6','4',0},
+        release: [_UTSNAME_LENGTH]byte{'6','9','.','4','.','2','0',0},
         version: [_UTSNAME_LENGTH]byte{'0','.','1',0},
         machine: [_UTSNAME_LENGTH]byte{0},
         domainname: [_UTSNAME_LENGTH]byte{0},
@@ -428,6 +428,7 @@ func linuxExitGroupSyscall(status uint32) uint32 {
     //text_mode_print_hex(uint8(currentThread.domain.pid))
     //text_mode_println("")
     ExitDomain(currentThread.domain)
+    PerformSchedule = true
     // Already in new context so return value from last syscall from current domain
     return currentThread.regs.EAX
 }

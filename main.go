@@ -6,14 +6,6 @@ import (
 )
 
 var progs = [...]string {
-    "/usr/hellogo",
-    "/usr/helloc",
-    "/usr/hellorust",
-    "/usr/hellogo",
-    "/usr/hellorust",
-    "/usr/readtest",
-    "/usr/rustread",
-    "/usr/rustread",
     "/usr/rustread",
 }
 

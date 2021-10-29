@@ -55,6 +55,7 @@ var (
     idtTable = [256]IdtEntry{}
     idtDescriptor IdtDescriptor = IdtDescriptor{}
     handlers [256]InterruptHandler
+    PerformSchedule = false
 )
 
 func isrVector()
@@ -82,7 +83,10 @@ func do_isr(regs RegisterState, info InterruptInfo){
     currentThread.info = info
     currentThread.regs = regs
     handlers[info.InterruptNumber]()
-    Schedule()
+    if PerformSchedule {
+        Schedule()
+        PerformSchedule = false
+    }
 
     info = currentThread.info
     regs = currentThread.regs
