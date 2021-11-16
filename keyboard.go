@@ -48,7 +48,7 @@ const (
 
 
 var buffer KeyboardRing = KeyboardRing {
-    Ring: GenericRing {},
+    Ring: GenericRing {}, // Important to prevent initialization at runtime
 }
 
 var tempKeystate keystate = keystate{}

@@ -40,7 +40,9 @@ func main() {
     InitPIC()
     EnableInterrupts()
     InitKeyboard()
-
+    InitATA()
+    text_mode_println("Initilaization complete")
+    //HdReadSector()
     for {
         Hlt()
         temp()

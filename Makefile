@@ -14,6 +14,7 @@ AS_FLAGS := -g -f elf32 -F dwarf -I arch/$(ARCH)/asm/
 kernel_target :=$(BUILD_DIR)/kernel-$(ARCH).bin
 iso_target := $(BUILD_DIR)/kernel-$(ARCH).iso
 
+disk_image := disk.img
 
 asm_src_files := $(wildcard arch/$(ARCH)/asm/*.s)
 asm_obj_files := $(patsubst arch/$(ARCH)/asm/%.s, $(BUILD_DIR)/arch/$(ARCH)/asm/%.o, $(asm_src_files))
@@ -58,12 +59,14 @@ $(iso_target): $(kernel_target)
 	@rm -r $(BUILD_DIR)/isofiles
 
 run: iso
-	qemu-system-i386 -d int,cpu_reset -no-reboot -cdrom $(iso_target)
+	qemu-system-i386 -d int,cpu_reset -no-reboot -cdrom $(iso_target) \
+		-hda disk.img -boot order=dc
 
 # When building gdb target disable optimizations (-N) and inlining (l) of Go code
 gdb: GC_FLAGS += -N -l
 gdb: iso
-	qemu-system-i386 -d int,cpu_reset -s -S -cdrom $(iso_target) &
+	qemu-system-i386 -d int,cpu_reset -s -S -cdrom $(iso_target) \
+		-hda disk.img -boot order=dc &
 	sleep 1
 	echo $(GOROOT)
 	gdb \

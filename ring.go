@@ -7,7 +7,7 @@ package main
 type GenericRing struct {
     head int
     tail int
-    Cap  int
+    Cap  int // Cannot use function as it requires memory allocation for a method reference
 }
 
 func (r *GenericRing) Len() int {
