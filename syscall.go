@@ -702,6 +702,10 @@ func linuxReadSyscall(fd uint32, buf uint32, count uint32) uint32 {
 
     var num  uint32 = 0
 
+    if buffer.Len() == 0{
+        BlockThread(currentThread)
+    }
+
     for buffer.Len() > 0 && num < count {
         raw_key := buffer.Pop().Keycode
         pressed := raw_key & 0x80 == 0

@@ -21,7 +21,6 @@ TEXT ·getIDT(SB),NOSPLIT,$0
     MOVL AX, ret+0(FP)
     RET
 
-
 TEXT ·isrVector(SB), NOSPLIT,$0
     //"Pushes all general purpose registers onto the stack in the following order: (E)AX, (E)CX, (E)DX, (E)BX, (E)SP, (E)BP, (E)SI, (E)DI. The value of SP is the value before the actual push of SP."
     PUSHAL

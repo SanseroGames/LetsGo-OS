@@ -8,6 +8,7 @@ USR_BUILD_DIR := $(BUILD_DIR)/usr
 
 LD := ld
 CC := gcc
+CXX := g++
 AS := nasm
 
 GOOS := linux
@@ -20,6 +21,7 @@ RUST_TARGET := i686-unknown-linux-musl
 LD_FLAGS := -n -melf_i386 -T arch/$(ARCH)/script/linker.ld -static --no-ld-generated-unwind-info
 AS_FLAGS := -g -f elf32 -F dwarf -I arch/$(ARCH)/asm/
 CC_FLAGS := -static -fno-inline -O0
+CXX_FLAGS := -static -fno-inline -O0
 
 kernel_target :=$(BUILD_DIR)/kernel-$(ARCH).bin
 iso_target := $(BUILD_DIR)/kernel-$(ARCH).iso
@@ -33,6 +35,8 @@ usr_go_apps_src := $(wildcard usr/*/main.go)
 usr_go_apps_obj := $(patsubst usr/%/main.go, $(USR_BUILD_DIR)/%.o, $(usr_go_apps_src))
 usr_c_apps_src := $(wildcard usr/*/main.c)
 usr_c_apps_obj := $(patsubst usr/%/main.c, $(USR_BUILD_DIR)/%.o, $(usr_c_apps_src))
+usr_cpp_apps_src := $(wildcard usr/*/main.cpp)
+usr_cpp_apps_obj := $(patsubst usr/%/main.cpp, $(USR_BUILD_DIR)/%.o, $(usr_cpp_apps_src))
 usr_rust_apps_src := $(wildcard usr/*/Cargo.toml)
 usr_rust_apps_obj := $(patsubst usr/%/Cargo.toml, $(USR_BUILD_DIR)/%.o, $(usr_rust_apps_src))
 
@@ -57,7 +61,12 @@ $(USR_BUILD_DIR)/%.o: usr/%/main.c
 	@echo "[CC] Building $@ (from $<)"
 	@$(CC) -m32 $(CC_FLAGS) -o $(USR_BUILD_DIR)/$(basename $(notdir $@)) $<
 
-usr: $(usr_go_apps_obj) $(usr_c_apps_obj) $(usr_rust_apps_obj)
+$(USR_BUILD_DIR)/%.o: usr/%/main.cpp
+	@echo "[C++] Building $@ (from $<)"
+	@$(CXX) -m32 $(CXX_FLAGS) -o $(USR_BUILD_DIR)/$(basename $(notdir $@)) $<
+
+
+usr: $(usr_go_apps_obj) $(usr_c_apps_obj) $(usr_rust_apps_obj) $(usr_cpp_apps_obj)
 
 go.o:
 	@mkdir -p $(BUILD_DIR)
@@ -95,7 +104,7 @@ $(iso_target): $(kernel_target) usr
 	@rm -r $(BUILD_DIR)/isofiles
 
 run: iso
-	qemu-system-i386 -d cpu_reset -no-reboot -cdrom $(iso_target) \
+	qemu-system-i386 -d int,cpu_reset -no-reboot -cdrom $(iso_target) \
 		-hda $(disk_image) -boot order=dc
 
 # When building gdb target disable optimizations (-N) and inlining (l) of Go code

@@ -46,6 +46,7 @@ type thread struct {
     domain *domain
     tid uint32
     StackStart uintptr
+    StackEnd uintptr
 
     isRemoved bool
     // Currently ignored '^^ I don't have to do it thanks to spurious wakeups
@@ -147,6 +148,8 @@ var (
     currentDomain *domain = nil
     allDomains domainList = domainList{head:nil, tail: nil}
     largestPid uint32 = 0x0
+    HltKernel bool = false
+    kernelThread thread = thread{}
 )
 
 func backupFpRegs(buffer uintptr)
@@ -181,6 +184,7 @@ func BlockThread(t *thread) {
     t.isBlocked = true
     t.domain.runningThreads.Dequeue(t)
     t.domain.blockedThreads.Enqueue(t)
+    PerformSchedule = true
 }
 
 func Schedule() {
@@ -212,8 +216,13 @@ func Schedule() {
 
     if newThread == nil {
         // All threads blocked or no threads exist anymore.
+        HltKernel = false
+        //currentThread = nil
+        EnableInterrupts()
         Hlt()
-        kernelPanic("TODO: What do I do here?")
+        DisableInterrupts()
+        kernelPanic("test")
+        return
     }
     currentDomain = nextDomain
     if newThread == currentThread {

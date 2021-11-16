@@ -56,6 +56,7 @@ var (
     idtDescriptor IdtDescriptor = IdtDescriptor{}
     handlers [256]InterruptHandler
     PerformSchedule = false
+    oldThread *thread
 )
 
 func isrVector()
@@ -73,6 +74,25 @@ func DisableInterrupts()
 func setDS(ds_segment uint32)
 func setGS(gs_segment uint32)
 
+// TODO: Do I keep this? Debugging
+type stack struct {
+	lo uintptr
+	hi uintptr
+}
+
+type g struct {
+	// Stack parameters.
+	// stack describes the actual stack memory: [stack.lo, stack.hi).
+	// stackguard0 is the stack pointer compared in the Go stack growth prologue.
+	// It is stack.lo+StackGuard normally, but can be StackPreempt to trigger a preemption.
+	// stackguard1 is the stack pointer compared in the C stack growth prologue.
+	// It is stack.lo+StackGuard on g0 and gsignal stacks.
+	// It is ~0 on other goroutine stacks, to trigger a call to morestackc (and crash).
+	stack       stack   // offset known to runtime/cgo
+	stackguard0 uintptr // offset known to liblink
+	stackguard1 uintptr // offset known to liblink
+}
+
 //go:nosplit
 func do_isr(regs RegisterState, info InterruptInfo){
     setGS(KGS_SELECTOR)
@@ -80,16 +100,35 @@ func do_isr(regs RegisterState, info InterruptInfo){
 
     switchPageDir(kernelMemSpace.PageDirectory)
 
+    //tss.esp0 = uint32(kernelStack)
+    if tss.esp0 != uint32(kernelThread.StackStart) {
+        kernelPanic("AAAA")
+    }
+    if info.ESP < uint32(kernelThread.StackEnd) {
+        DisableInterrupts()
+        Hlt()
+        kernelPanic("Stack over or underflow")
+    }
+
+    if info.CS == KCS_SELECTOR {
+        oldThread = currentThread
+        currentThread = &kernelThread
+    }
     currentThread.info = info
     currentThread.regs = regs
     handlers[info.InterruptNumber]()
+    if info.CS == KCS_SELECTOR {
+        currentThread = oldThread
+    }
     if PerformSchedule {
         Schedule()
         PerformSchedule = false
     }
 
-    info = currentThread.info
-    regs = currentThread.regs
+    if info.CS != KCS_SELECTOR {
+        info = currentThread.info
+        regs = currentThread.regs
+    }
 
     switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
 }
@@ -120,6 +159,7 @@ func InitInterrupts(){
     isrBaseAddr := reflect.ValueOf(isrEntryList).Pointer()
     for i := range idtTable {
         if(i == 2 || i == 15) {continue}
+        // Bytes are counted based on assembly
         isrAddr := isrBaseAddr + uintptr(i*23)
         low := uint16(isrAddr)
         high := uint16(uint32(isrAddr)>>16)

@@ -68,7 +68,8 @@ _rt0_entry:
 	mov dword [g0_ptr], runtime.g0
 
 	; jump into the go code
-    push esp
+    push stack_bottom
+    push stack_top
     mov ebx, [tmp_multiboot_info]
     push ebx
 	extern main.main

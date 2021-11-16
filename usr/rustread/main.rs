@@ -11,6 +11,8 @@ fn main() -> io::Result<()> {
         println!("\r{: <80}", line);
         if line == "secret" {
             println!("Yoo! Secret!")
+        } else if line == "exit" {
+            return Ok(())
         }
     }
 }

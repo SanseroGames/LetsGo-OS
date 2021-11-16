@@ -15,7 +15,10 @@ var threads [len(progs)]thread
 func main()
 
 //go:linkname kmain main.main
-func kmain(info *MultibootInfo, stackstart uintptr) {
+func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
+    if stackstart < stackend {
+        kernelPanic("No stack")
+    }
     text_mode_init()
 
     text_mode_flush_screen()
@@ -47,7 +50,7 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
 
     InitPaging()
 
-    InitUserMode(stackstart)
+    InitUserMode(stackstart, stackend)
 
     text_mode_println_col("Initilaization complete", 0x2)
     //HdReadSector()
@@ -63,6 +66,19 @@ func kmain(info *MultibootInfo, stackstart uintptr) {
     for i := range domains {
         AddDomain(&domains[i])
     }
+
+    text_mode_print("domain size: ")
+    text_mode_print_hex32(uint32(unsafe.Sizeof(domains[0])))
+    text_mode_print(" thread size: ")
+    text_mode_print_hex32(uint32(unsafe.Sizeof(threads[0])))
+    text_mode_print(" totoal: ")
+    text_mode_print_hex32(uint32(unsafe.Sizeof(domains[0]))+uint32(unsafe.Sizeof(threads[0])))
+    text_mode_println("")
+    text_mode_print("stack start: ")
+    text_mode_print_hex32(uint32(kernelThread.StackStart))
+    text_mode_print("stack end: ")
+    text_mode_print_hex32(uint32(kernelThread.StackEnd))
+    text_mode_println("")
 
     if currentThread == nil {
         kernelPanic("I expect AddDomain to set currentThread variable")
@@ -94,6 +110,7 @@ func panicHelper(info *InterruptInfo, regs *RegisterState){
     Hlt()
 }
 
+//go:nosplit
 func kernelPanic(msg string) {
     text_mode_print_errorln(msg)
     text_mode_print_errorln("kernel panic :(")

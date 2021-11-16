@@ -140,7 +140,7 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 }
 
 
-func InitUserMode(kernelStackStart uintptr) {             // Add usermode code segment
+func InitUserMode(kernelStackStart uintptr, kernelStackEnd uintptr) {             // Add usermode code segment
     userModeCS := AddSegment(userModeBase, userModeLimit, PRIV_USER | SEG_EXEC | SEG_R | SEG_NORMAL, SEG_GRAN_4K_PAGE)
     // Add usermode data segment
     userModeDS := AddSegment(userModeBase, userModeLimit, PRIV_USER | SEG_NOEXEC | SEG_W | SEG_NORMAL, SEG_GRAN_4K_PAGE)
@@ -157,6 +157,8 @@ func InitUserMode(kernelStackStart uintptr) {             // Add usermode code s
 
     tss.ss0 = KDS_SELECTOR
     tss.esp0 = uint32(kernelStackStart)
+    kernelThread.StackStart = kernelStackStart
+    kernelThread.StackEnd = kernelStackEnd
     flushTss(tssIndex*8)
 }
 
