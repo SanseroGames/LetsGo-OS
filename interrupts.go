@@ -104,9 +104,11 @@ func do_isr(regs RegisterState, info InterruptInfo){
     if tss.esp0 != uint32(kernelThread.StackStart) {
         kernelPanic("AAAA")
     }
-    if info.ESP < uint32(kernelThread.StackEnd) {
+    if regs.KernelESP < uint32(kernelThread.StackEnd) {
         DisableInterrupts()
         Hlt()
+        text_mode_print_hex32(info.ESP)
+        text_mode_print_hex32(uint32(kernelThread.StackEnd))
         kernelPanic("Stack over or underflow")
     }
 
@@ -129,8 +131,9 @@ func do_isr(regs RegisterState, info InterruptInfo){
         info = currentThread.info
         regs = currentThread.regs
     }
-
-    switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
+    if info.CS != KCS_SELECTOR {
+        switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
+    }
 }
 
 func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8){

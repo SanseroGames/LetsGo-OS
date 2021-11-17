@@ -9,6 +9,8 @@ const (
 	fbWidth            = 80
 	fbHeight           = 25
 	fbPhysAddr uintptr = 0xb8000
+    cursorHeight       = 1 // scanlines
+    cursorStart        = 11 // scanlines
 )
 
 var (
@@ -24,21 +26,45 @@ func text_mode_init(){
 	    Cap:  fbWidth * fbHeight,
 	    Data: fbPhysAddr,
     }))
+    text_mode_enable_cursor()
+    text_mode_update_cursor(0,0)
 }
+
+func text_mode_enable_cursor() {
+    Outb(0x3D4, 0x0A);
+	Outb(0x3D5, (Inb(0x3D5) & 0xC0) | cursorStart); // cursor start scanline
+
+	Outb(0x3D4, 0x0B);
+	Outb(0x3D5, (Inb(0x3D5) & 0xE0) | cursorHeight+cursorStart); // cursor end scanline
+}
+
+func text_mode_disable_cursor() {
+    Outb(0x3D4, 0x0A);
+	Outb(0x3D5, 0x20);
+}
+
+func text_mode_update_cursor(x int, y int) {
+    pos := y * fbWidth + x;
+	Outb(0x3D4, 0x0F);
+	Outb(0x3D5, uint8(pos & 0xFF));
+	Outb(0x3D4, 0x0E);
+	Outb(0x3D5, uint8((pos >> 8) & 0xFF));
+}
+
 
 func text_mode_flush_screen(){
     for i := range fb{
-        fb[i] = 0
+        fb[i] = 0xf00
     }
 }
 
 func text_mode_check_fb_move(){
-    if(fbCurLine == fbHeight){
+    for fbCurLine >= fbHeight{
         for i := 1; i<fbHeight; i++{
             copy(fb[(i-1)*fbWidth:(i-1)*fbWidth+fbWidth], fb[i*fbWidth:i*fbWidth+fbWidth])
         }
         for i:=0; i < fbWidth; i++{
-            fb[(fbHeight-1)*fbWidth + i] = 0
+            fb[(fbHeight-1)*fbWidth + i] = 0xf00
         }
         fbCurLine--
     }
@@ -94,7 +120,7 @@ func text_mode_print_char_col(char uint8, attr uint8){
         fbCurCol=0
         text_mode_check_fb_move()
     } else if char == '\b' {
-        fb[fbCurCol+fbCurLine*fbWidth] = 0
+        fb[fbCurCol+fbCurLine*fbWidth] = 0xf00
         fbCurCol = fbCurCol-1
         if fbCurCol < 0 {
             fbCurCol = 0
@@ -106,6 +132,7 @@ func text_mode_print_char_col(char uint8, attr uint8){
         fb[fbCurCol+fbCurLine*fbWidth] = uint16(attr)<<8 | uint16(char)
         fbCurCol++
     }
+    text_mode_update_cursor(fbCurCol, fbCurLine)
 }
 
 func text_mode_print_hex64(num uint64){

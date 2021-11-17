@@ -148,7 +148,7 @@ var (
     currentDomain *domain = nil
     allDomains domainList = domainList{head:nil, tail: nil}
     largestPid uint32 = 0x0
-    HltKernel bool = false
+    kernelHlt bool = false
     kernelThread thread = thread{}
 )
 
@@ -187,8 +187,13 @@ func BlockThread(t *thread) {
     PerformSchedule = true
 }
 
+func ResumeThread(t *thread) {
+    t.isBlocked = false
+    t.domain.blockedThreads.Dequeue(t)
+    t.domain.runningThreads.Enqueue(t)
+}
+
 func Schedule() {
-    // TODO: Currently assumes it is called after every syscall
     if currentDomain == nil {
         kernelPanic("No Domains to schedule")
     }
@@ -200,7 +205,6 @@ func Schedule() {
             if newThread != nil {
                 break
             }
-            kernelPanic("debug")
         }
     }
     //text_mode_print("next domain: ")
@@ -215,15 +219,23 @@ func Schedule() {
     //text_mode_println("")
 
     if newThread == nil {
+        if kernelHlt {
+            // We are already stalling the kernel
+            return
+        }
         // All threads blocked or no threads exist anymore.
-        HltKernel = false
+        kernelHlt = true
+        PerformSchedule = false
         //currentThread = nil
         EnableInterrupts()
-        Hlt()
+        for {
+            Hlt()
+        }
         DisableInterrupts()
         kernelPanic("test")
         return
     }
+    kernelHlt = false
     currentDomain = nextDomain
     if newThread == currentThread {
         return

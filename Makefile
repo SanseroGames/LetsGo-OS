@@ -104,7 +104,7 @@ $(iso_target): $(kernel_target) usr
 	@rm -r $(BUILD_DIR)/isofiles
 
 run: iso
-	qemu-system-i386 -d int,cpu_reset -no-reboot -cdrom $(iso_target) \
+	qemu-system-i386 -d cpu_reset -no-reboot -cdrom $(iso_target) \
 		-hda $(disk_image) -boot order=dc
 
 # When building gdb target disable optimizations (-N) and inlining (l) of Go code
