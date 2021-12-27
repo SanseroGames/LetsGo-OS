@@ -107,6 +107,10 @@ run: iso
 	qemu-system-i386 -d cpu_reset -no-reboot -cdrom $(iso_target) \
 		-hda $(disk_image) -boot order=dc
 
+run-interrupt: iso
+	qemu-system-i386 -d int,cpu_reset -no-reboot -cdrom $(iso_target) \
+		-hda $(disk_image) -boot order=dc
+
 # When building gdb target disable optimizations (-N) and inlining (l) of Go code
 gdb: GC_FLAGS += -N -l
 gdb: iso

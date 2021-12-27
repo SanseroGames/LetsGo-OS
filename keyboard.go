@@ -53,6 +53,7 @@ var buffer KeyboardRing = KeyboardRing {
 
 var tempKeystate Keystate = Keystate{}
 
+//go:nospilt
 func handleKeyboard(){
     keycode := Inb(keyboardInputPort) // TODO: constant Where to get this?
     tempKeystate.Keycode = keycode

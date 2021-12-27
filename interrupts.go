@@ -57,6 +57,7 @@ var (
     handlers [256]InterruptHandler
     PerformSchedule = false
     oldThread *thread
+    kernelInterrupt = false
 )
 
 func isrVector()
@@ -74,64 +75,59 @@ func DisableInterrupts()
 func setDS(ds_segment uint32)
 func setGS(gs_segment uint32)
 
-// TODO: Do I keep this? Debugging
-type stack struct {
-	lo uintptr
-	hi uintptr
-}
-
-type g struct {
-	// Stack parameters.
-	// stack describes the actual stack memory: [stack.lo, stack.hi).
-	// stackguard0 is the stack pointer compared in the Go stack growth prologue.
-	// It is stack.lo+StackGuard normally, but can be StackPreempt to trigger a preemption.
-	// stackguard1 is the stack pointer compared in the C stack growth prologue.
-	// It is stack.lo+StackGuard on g0 and gsignal stacks.
-	// It is ~0 on other goroutine stacks, to trigger a call to morestackc (and crash).
-	stack       stack   // offset known to runtime/cgo
-	stackguard0 uintptr // offset known to liblink
-	stackguard1 uintptr // offset known to liblink
-}
-
 //go:nosplit
 func do_isr(regs RegisterState, info InterruptInfo){
     setGS(KGS_SELECTOR)
     setDS(KDS_SELECTOR)
 
     switchPageDir(kernelMemSpace.PageDirectory)
+    SetInterruptStack(scheduleThread.kernelStack.hi)
 
-    //tss.esp0 = uint32(kernelStack)
-    if tss.esp0 != uint32(kernelThread.StackStart) {
-        kernelPanic("AAAA")
-    }
-    if regs.KernelESP < uint32(kernelThread.StackEnd) {
+    if regs.KernelESP < uint32(scheduleThread.kernelStack.lo) {
+        // Test for scheduler stack underflow
         DisableInterrupts()
         Hlt()
         text_mode_print_hex32(info.ESP)
-        text_mode_print_hex32(uint32(kernelThread.StackEnd))
-        kernelPanic("Stack over or underflow")
+        text_mode_print_hex32(uint32(scheduleThread.kernelStack.lo))
+        kernelPanic("Stack underflow")
     }
 
     if info.CS == KCS_SELECTOR {
-        oldThread = currentThread
-        currentThread = &kernelThread
+        // We're on the scheduler stack
+        currentThread.kernelInfo = info
+        currentThread.kernelRegs = regs
+        kernelInterrupt = true
+    } else {
+        if regs.KernelESP > uint32(currentThread.kernelStack.hi) ||
+            regs.KernelESP < uint32(currentThread.kernelStack.lo) {
+            kernelPanic("kernel stack for process is out of range")
+        }
+        currentThread.info = info
+        currentThread.regs = regs
+        kernelInterrupt = false
     }
-    currentThread.info = info
-    currentThread.regs = regs
     handlers[info.InterruptNumber]()
-    if info.CS == KCS_SELECTOR {
-        currentThread = oldThread
-    }
-    if PerformSchedule {
-        Schedule()
-        PerformSchedule = false
-    }
 
-    if info.CS != KCS_SELECTOR {
+    if info.CS == KCS_SELECTOR {
+        // We're on the scheduler stack
+        if PerformSchedule {
+            Schedule()
+            PerformSchedule = false
+        }
+        info = currentThread.kernelInfo
+        regs = currentThread.kernelRegs
+
+    } else {
+        if PerformSchedule {
+            PerformSchedule = false
+            // Let PIT make a schedule
+            EnableInterrupts()
+            Hlt()
+            DisableInterrupts()
+        }
         info = currentThread.info
         regs = currentThread.regs
-    }
-    if info.CS != KCS_SELECTOR {
+        SetInterruptStack(currentThread.kernelStack.hi)
         switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
     }
 }

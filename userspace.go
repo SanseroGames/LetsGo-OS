@@ -66,12 +66,21 @@ func JumpUserMode (regs RegisterState, info InterruptInfo)
 
 func hackyGetFuncAddr(funcAddr func()) uintptr
 
+func SetInterruptStack(addr uintptr) {
+    tss.esp0 = uint32(addr)
+}
 
-func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread) {
+func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, targetDomain *domain) {
     newThreadAddr := (uintptr)(unsafe.Pointer(outThread))
     Memclr(newThreadAddr, int(unsafe.Sizeof(outThread)))
     outThread.fpOffset = 0xffffffff
-    outThread.StackStart = newStack
+    outThread.userStack.hi = newStack
+    outThread.userStack.lo = newStack-16*0x1000
+    kernelStack := allocPage()
+    Memclr(kernelStack, PAGE_SIZE)
+    outThread.kernelStack.lo = kernelStack
+    outThread.kernelStack.hi = kernelStack+PAGE_SIZE
+    targetDomain.MemorySpace.mapPage(kernelStack, kernelStack, PAGE_RW | PAGE_PERM_KERNEL)
     outThread.info.CS = defaultUserSegments.cs | 3
     outThread.info.SS = defaultUserSegments.ss | 3
     outThread.regs.GS = defaultUserSegments.gs | 3
@@ -93,6 +102,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread) {
         kernelPanic("Uninitialized next and prev")
     }
     outThread.info.ESP = uint32(newStack)
+    targetDomain.AddThread(outThread)
 }
 // Need pointer as this function should not do any memory allocations
 func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
@@ -119,9 +129,7 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
         stackPages[i] = stack
     }
 
-    CreateNewThread(outMainThread, defaultStackStart, nil)
-    outDomain.AddThread(outMainThread)
-
+    CreateNewThread(outMainThread, defaultStackStart, nil, outDomain)
 
     var aux [32]auxVecEntry
     nrVec := LoadAuxVector(aux[:], elfHdr, loadAddr)
@@ -157,8 +165,8 @@ func InitUserMode(kernelStackStart uintptr, kernelStackEnd uintptr) {           
 
     tss.ss0 = KDS_SELECTOR
     tss.esp0 = uint32(kernelStackStart)
-    kernelThread.StackStart = kernelStackStart
-    kernelThread.StackEnd = kernelStackEnd
+    scheduleThread.kernelStack.hi = kernelStackStart
+    scheduleThread.kernelStack.lo = kernelStackEnd
     flushTss(tssIndex*8)
 }
 

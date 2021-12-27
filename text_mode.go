@@ -26,8 +26,8 @@ func text_mode_init(){
 	    Cap:  fbWidth * fbHeight,
 	    Data: fbPhysAddr,
     }))
-    text_mode_enable_cursor()
-    text_mode_update_cursor(0,0)
+    //text_mode_enable_cursor()
+    //text_mode_update_cursor(0,0)
 }
 
 func text_mode_enable_cursor() {
@@ -81,7 +81,6 @@ func text_mode_println_col(s string, attr uint8){
         text_mode_print_char_col(uint8(b), attr)
     }
     text_mode_print_char(0xa)
-
 }
 
 
@@ -132,7 +131,7 @@ func text_mode_print_char_col(char uint8, attr uint8){
         fb[fbCurCol+fbCurLine*fbWidth] = uint16(attr)<<8 | uint16(char)
         fbCurCol++
     }
-    text_mode_update_cursor(fbCurCol, fbCurLine)
+    //text_mode_update_cursor(fbCurCol, fbCurLine)
 }
 
 func text_mode_print_hex64(num uint64){

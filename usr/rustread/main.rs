@@ -1,4 +1,6 @@
 use std::io;
+use std::io::Read;
+use std::io::Write;
 use uname_rs::Uname;
 
 const SCREEN_WIDTH: usize = 80;
@@ -19,32 +21,22 @@ fn main() -> io::Result<()> {
 
 fn read_line() -> String {
     let mut line = String::new();
-    let stdin = io::stdin(); // We get `Stdin` here.
-    let max_count = 10000;
-    let mut count = max_count;
-
     loop {
-        let mut buffer = String::new();
-        stdin.read_line(&mut buffer).unwrap();
-        for c in buffer.chars() {
-            
-            match c {
+        let mut actual_line = line.clone();
+        actual_line.push('_');
+        print!("\r> {: <77}", actual_line);
+        let _a = io::stdout().flush();
+        let mut buffer = [0; 1];
+        let _n = io::stdin().read(&mut buffer[..]);
+        for c in buffer {
+            let t = c as char;
+            match t {
                 '\x08' => line = rem_last(&line).to_string(),
                 '\n' => return line,
                 _ => if line.chars().count() < SCREEN_WIDTH - 3 {
-                        line.push(c)
+                        line.push(t)
                     }
-                    
             }
-        }
-        let mut actual_line = line.clone();
-        if count < max_count/2 {
-            actual_line.push('_')
-        }
-        print!("\r> {: <78}", actual_line);
-        count = count - 1;
-        if count <= 0{
-           count = max_count; 
         }
     }
 }

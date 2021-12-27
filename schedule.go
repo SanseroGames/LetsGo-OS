@@ -39,15 +39,19 @@ func (d *domain) RemoveThread(t *thread) {
     d.numThreads--
 }
 
+type stack struct {
+    hi uintptr
+    lo uintptr
+}
+
 type thread struct {
     next *thread
     prev *thread
 
     domain *domain
     tid uint32
-    StackStart uintptr
-    StackEnd uintptr
-
+    userStack stack
+    kernelStack stack
     isRemoved bool
     // Currently ignored '^^ I don't have to do it thanks to spurious wakeups
     isBlocked bool
@@ -56,6 +60,10 @@ type thread struct {
     // Infos to stall a thread when switching
     info InterruptInfo
     regs RegisterState
+
+    kernelInfo InterruptInfo
+    kernelRegs RegisterState
+
 
     // TLS
     tlsSegments [GDT_ENTRIES]GdtEntry
@@ -149,7 +157,7 @@ var (
     allDomains domainList = domainList{head:nil, tail: nil}
     largestPid uint32 = 0x0
     kernelHlt bool = false
-    kernelThread thread = thread{}
+    scheduleThread thread = thread{}
 )
 
 func backupFpRegs(buffer uintptr)
@@ -185,6 +193,12 @@ func BlockThread(t *thread) {
     t.domain.runningThreads.Dequeue(t)
     t.domain.blockedThreads.Enqueue(t)
     PerformSchedule = true
+}
+
+func Block() {
+    EnableInterrupts()
+    Hlt()
+    DisableInterrupts()
 }
 
 func ResumeThread(t *thread) {
@@ -227,11 +241,6 @@ func Schedule() {
         kernelHlt = true
         PerformSchedule = false
         //currentThread = nil
-        EnableInterrupts()
-        for {
-            Hlt()
-        }
-        DisableInterrupts()
         kernelPanic("test")
         return
     }

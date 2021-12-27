@@ -21,7 +21,11 @@ const (
 var picHandlers [16]func()
 
 func PICInterruptHandler(){
-    irq := currentThread.info.InterruptNumber - uint32(PIC1Offset)
+    info := &currentThread.info
+    if kernelInterrupt {
+        info = &currentThread.kernelInfo
+    }
+    irq := info.InterruptNumber - uint32(PIC1Offset)
     if(irq == 7){
         Outb(PIC1Port, PIC_ReadISR)
         res := Inb(PIC1Port)

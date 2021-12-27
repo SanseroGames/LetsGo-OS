@@ -142,6 +142,9 @@ var (
 )
 
 func linuxSyscallHandler(){
+    if kernelInterrupt {
+        kernelPanic("Why is the kernel making a syscall? Stop that")
+    }
     var ret uint32 = 0
     syscallNr := currentThread.regs.EAX
     arg1 := currentThread.regs.EBX
@@ -494,7 +497,7 @@ func linuxCloneSyscall(flags uint32, stack uint32) uint32 {
     newThreadMem := allocPage()
     Memclr(newThreadMem, PAGE_SIZE)
     newThread := (* thread)(unsafe.Pointer(newThreadMem))
-    CreateNewThread(newThread, uintptr(stack), currentThread)
+    CreateNewThread(newThread, uintptr(stack), currentThread, currentThread.domain)
 
     currentThread.domain.AddThread(newThread)
     return newThread.tid
@@ -702,17 +705,19 @@ func linuxReadSyscall(fd uint32, buf uint32, count uint32) uint32 {
 
     var num  uint32 = 0
 
-    if buffer.Len() == 0{
-        BlockThread(currentThread)
-    }
+    for num == 0 {
+        for buffer.Len() == 0 {
+            Block()
+        }
 
-    for buffer.Len() > 0 && num < count {
-        raw_key := buffer.Pop().Keycode
-        pressed := raw_key & 0x80 == 0
-        key := raw_key & 0x7f
-        if pressed {
-            arr[num] = translateKeycode(key)
-            num++
+        for buffer.Len() > 0 && num < count {
+            raw_key := buffer.Pop().Keycode
+            pressed := raw_key & 0x80 == 0
+            key := raw_key & 0x7f
+            if pressed {
+                arr[num] = translateKeycode(key)
+                num++
+            }
         }
     }
     return num

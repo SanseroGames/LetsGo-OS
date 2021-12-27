@@ -6,7 +6,11 @@ import (
 )
 
 var progs = [...]string {
-    "/usr/rustread",
+    "/usr/helloc",
+    "/usr/hellocxx",
+    "/usr/hellogo",
+    "/usr/hellorust",
+    "/usr/statx",
 }
 
 var domains [len(progs)]domain
@@ -16,7 +20,7 @@ func main()
 
 //go:linkname kmain main.main
 func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
-    if stackstart < stackend {
+    if stackstart <= stackend {
         kernelPanic("No stack")
     }
     text_mode_init()
@@ -71,18 +75,25 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
     text_mode_print_hex32(uint32(unsafe.Sizeof(domains[0])))
     text_mode_print(" thread size: ")
     text_mode_print_hex32(uint32(unsafe.Sizeof(threads[0])))
-    text_mode_print(" totoal: ")
+    text_mode_print(" total: ")
     text_mode_print_hex32(uint32(unsafe.Sizeof(domains[0]))+uint32(unsafe.Sizeof(threads[0])))
     text_mode_println("")
     text_mode_print("stack start: ")
-    text_mode_print_hex32(uint32(kernelThread.StackStart))
+    text_mode_print_hex32(uint32(scheduleThread.kernelStack.hi))
     text_mode_print("stack end: ")
-    text_mode_print_hex32(uint32(kernelThread.StackEnd))
+    text_mode_print_hex32(uint32(scheduleThread.kernelStack.lo))
+    text_mode_println("")
+
+    text_mode_print("info: ")
+    text_mode_print_hex32(uint32(unsafe.Sizeof(currentThread.info)))
+    text_mode_print("regs: ")
+    text_mode_print_hex32(uint32(unsafe.Sizeof(currentThread.regs)))
     text_mode_println("")
 
     if currentThread == nil {
         kernelPanic("I expect AddDomain to set currentThread variable")
     }
+    SetInterruptStack(currentThread.kernelStack.hi)
     switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
     JumpUserMode(currentThread.regs, currentThread.info)
     kernelPanic("Could not jump to user space :/")

@@ -11,7 +11,7 @@ func handlePit() {
 
 func InitPit() {
     Outb(PIT_PORT_DATA, 0x00);		// Low byte
-	Outb(PIT_PORT_DATA, 0x01);	// High byte
+	Outb(PIT_PORT_DATA, 0x02);	// High byte
     RegisterPICHandler(0, handlePit)
     EnableIRQ(0)
 }
