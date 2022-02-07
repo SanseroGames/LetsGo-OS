@@ -142,9 +142,6 @@ var (
 )
 
 func linuxSyscallHandler(){
-    if kernelInterrupt {
-        kernelPanic("Why is the kernel making a syscall? Stop that")
-    }
     var ret uint32 = 0
     syscallNr := currentThread.regs.EAX
     arg1 := currentThread.regs.EBX
@@ -153,6 +150,23 @@ func linuxSyscallHandler(){
     arg4 := currentThread.regs.ESI
     arg5 := currentThread.regs.EDI
     arg6 := currentThread.regs.EBP
+    if kernelInterrupt {
+        syscallNr = currentThread.kernelRegs.EAX
+        arg1 = currentThread.kernelRegs.EBX
+        arg2 = currentThread.kernelRegs.ECX
+        arg3 = currentThread.kernelRegs.EDX
+        arg4 = currentThread.kernelRegs.ESI
+        arg5 = currentThread.kernelRegs.EDI
+        arg6 = currentThread.kernelRegs.EBP
+
+        if false {
+        text_mode_print("kernel syscallnr: ")
+        text_mode_print_hex32(syscallNr)
+        text_mode_println("")
+        kernelPanic("Why is the kernel making a syscall?")
+        }
+    }
+
     switch (syscallNr) {
         case syscall.SYS_WRITE: {
             // Linux write syscall
@@ -786,7 +800,10 @@ func linuxFutexSyscall(uaddr uint32, futex_op uint32, val uint32, timeout uint32
 func unsupportedSyscall(){
     text_mode_print_char(0xa)
     text_mode_print_errorln("Unsupported Linux Syscall received! Disabling Interrupts and halting")
-    panicHelper(&currentThread.info, &currentThread.regs)
+    text_mode_print("Syscall Number: ")
+    text_mode_print_hex32(currentThread.regs.EAX)
+    text_mode_println("")
+    panicHelper(currentThread)
 }
 
 func InitSyscall() {

@@ -7,10 +7,6 @@ import (
 
 var progs = [...]string {
     "/usr/helloc",
-    "/usr/hellocxx",
-    "/usr/hellogo",
-    "/usr/hellorust",
-    "/usr/statx",
 }
 
 var domains [len(progs)]domain
@@ -89,7 +85,6 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
     text_mode_print("regs: ")
     text_mode_print_hex32(uint32(unsafe.Sizeof(currentThread.regs)))
     text_mode_println("")
-
     if currentThread == nil {
         kernelPanic("I expect AddDomain to set currentThread variable")
     }
@@ -103,20 +98,40 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 func gpfPanic(){
     text_mode_print_char(0xa)
     text_mode_print_errorln("Received General Protection fault. Disabling Interrupts and halting")
-    text_mode_print("Domain ID: ")
-    text_mode_print_hex(uint8(currentThread.domain.pid))
-    text_mode_println("")
-    text_mode_print("Thread ID: ")
-    text_mode_print_hex(uint8(currentThread.tid))
-    text_mode_println("")
     text_mode_print("Errorcode: ")
     text_mode_print_hex32(currentThread.info.ExceptionCode)
     text_mode_println("")
-    panicHelper(&currentThread.info, &currentThread.regs)
+    panicHelper(currentThread)
 }
 
-func panicHelper(info *InterruptInfo, regs *RegisterState){
-    printRegisters(info, regs)
+func printFuncName(pc uintptr) {
+    f := findfuncTest(pc)
+    if f._func == nil {
+        text_mode_print("func: ")
+        text_mode_print_hex32(uint32(pc))
+        text_mode_println("\n")
+        return
+    }
+    s := funcname(f)
+    text_mode_println(s)
+}
+
+func panicHelper(thread *thread){
+    text_mode_print("Domain ID: ")
+    text_mode_print_hex(uint8(thread.domain.pid))
+    text_mode_println("")
+    text_mode_print("Thread ID: ")
+    text_mode_print_hex(uint8(thread.tid))
+    text_mode_println("")
+    if kernelInterrupt {
+        text_mode_print("In kernel function: ")
+        printFuncName(uintptr(thread.kernelInfo.EIP))
+    } else {
+        text_mode_print("In user function: ")
+        text_mode_print_hex32(thread.info.EIP)
+    }
+    text_mode_println("")
+    printThreadRegisters(thread)
     DisableInterrupts()
     Hlt()
 }
@@ -126,10 +141,32 @@ func kernelPanic(msg string) {
     text_mode_print_errorln(msg)
     text_mode_print_errorln("kernel panic :(")
     if currentThread != nil {
-        printTid()
+        panicHelper(currentThread)
     }
     DisableInterrupts()
     Hlt()
+}
+
+func printThreadRegisters(t *thread) {
+    text_mode_println("User regs:       Kernel regs:")
+    printRegisterLine("EIP: ", t.info.EIP, t.kernelInfo.EIP)
+    printRegisterLine("ESP: ", t.info.ESP, t.kernelInfo.ESP)
+    printRegisterLine("EBP: ", t.regs.EBP, t.kernelRegs.EBP)
+    printRegisterLine("EAX: ", t.regs.EAX, t.kernelRegs.EAX)
+    printRegisterLine("EBX: ", t.regs.EBX, t.kernelRegs.EBX)
+    printRegisterLine("ECX: ", t.regs.ECX, t.kernelRegs.ECX)
+    printRegisterLine("EDX: ", t.regs.EDX, t.kernelRegs.EDX)
+    printRegisterLine("ESI: ", t.regs.ESI, t.kernelRegs.ESI)
+    printRegisterLine("EDI: ", t.regs.EDI, t.kernelRegs.EDI)
+}
+
+func printRegisterLine(label string, userReg, kernelReg uint32) {
+    text_mode_print(label)
+    text_mode_print_hex32(userReg)
+    text_mode_print("    ")
+    text_mode_print(label)
+    text_mode_print_hex32(kernelReg)
+    text_mode_println("")
 }
 
 func printRegisters(info *InterruptInfo, regs *RegisterState){

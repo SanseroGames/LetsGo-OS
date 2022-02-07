@@ -82,7 +82,6 @@ func do_isr(regs RegisterState, info InterruptInfo){
 
     switchPageDir(kernelMemSpace.PageDirectory)
     SetInterruptStack(scheduleThread.kernelStack.hi)
-
     if regs.KernelESP < uint32(scheduleThread.kernelStack.lo) {
         // Test for scheduler stack underflow
         DisableInterrupts()

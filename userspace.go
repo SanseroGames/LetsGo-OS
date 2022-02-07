@@ -4,6 +4,55 @@ import (
     "unsafe"
 )
 
+type _func struct {
+	entry   uintptr // start pc
+	nameoff int32   // function name
+
+	args        int32  // in/out args size
+	deferreturn uint32 // offset of start of a deferreturn call instruction from entry, if any.
+
+	pcsp      uint32
+	pcfile    uint32
+	pcln      uint32
+	npcdata   uint32
+	cuOffset  uint32 // runtime.cutab offset of this function's CU
+	funcID    uint64 // set for certain special runtime functions
+	flag      uint8
+	_         [1]byte // pad
+	nfuncdata uint8   // must be last, must end on a uint32-aligned boundary
+}
+
+type moduledata struct {
+	pcHeader     unsafe.Pointer
+    funcnametab  []byte
+	cutab        []uint32
+	filetab      []byte
+	pctab        []byte
+	pclntable    []byte
+}
+
+type funcInfo struct {
+	*_func
+	datap *moduledata
+}
+
+func cfuncname(f funcInfo) *byte {
+	if f.nameoff == 0 {
+		return nil
+	}
+	return &f.datap.funcnametab[f.nameoff]
+}
+
+func funcname(f funcInfo) string {
+	return gostringnocopy(cfuncname(f))
+}
+
+//go:linkname gostringnocopy runtime.gostringnocopy
+func gostringnocopy(str *byte) string
+
+//go:linkname findfuncTest runtime.findfunc
+func findfuncTest(pc uintptr) funcInfo
+
 type tssEntry struct {
 	prev_tss uint32 // The previous TSS - with hardware task switching these form a kind of backward linked list.
 	esp0 uint32 // The stack pointer to load when changing to kernel mode.
