@@ -6,7 +6,7 @@ import (
 )
 
 var progs = [...]string {
-    "/usr/helloc",
+    "/usr/hellorust",
 }
 
 var domains [len(progs)]domain
@@ -136,15 +136,29 @@ func panicHelper(thread *thread){
     Hlt()
 }
 
+// wrapper for do_kernelPanic that gets the return address
+// and pushers it on the stack and then jumps to do_kernelPanic
+// this messes up the stack but we don't return so it's no issue
+func kernelPanic(msg string)
 //go:nosplit
-func kernelPanic(msg string) {
+func do_kernelPanic(caller uintptr, msg string) {
+    f := findfuncTest(caller)
     text_mode_print_errorln(msg)
-    text_mode_print_errorln("kernel panic :(")
+    text_mode_print_errorln("kernel panic :(\n")
+    text_mode_print("Called from function: ")
+    if f._func == nil {
+        text_mode_print_hex32(uint32(caller))
+    } else {
+        s := funcname(f)
+        text_mode_print(s)
+    }
+    text_mode_println("")
     if currentThread != nil {
         panicHelper(currentThread)
     }
     DisableInterrupts()
     Hlt()
+    // does not return
 }
 
 func printThreadRegisters(t *thread) {
