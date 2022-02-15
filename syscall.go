@@ -416,6 +416,30 @@ func linuxSyscallHandler(){
             }
 
         }
+        case syscall.SYS_SET_ROBUST_LIST: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("Set robust syscall")
+            }
+            ret = ^uint32(syscall.EINVAL)+1
+
+        }
+        case syscall.SYS_UGETRLIMIT: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("get upper r limit syscall")
+            }
+            ret = ^uint32(syscall.EINVAL)+1
+        }
+        // get random
+        case 0x163: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("get random syscall")
+            }
+            ret = ^uint32(syscall.EINVAL)+1
+
+        }
         // __NR_statx
         case 0x17f: {
             if PRINT_SYSCALL {
@@ -433,6 +457,16 @@ func linuxSyscallHandler(){
             //printRegisters(currentInfo, currentThread.regs)
             ret = ^uint32(syscall.EINVAL)+1
             //ret = linuxSetThreadAreaSyscall()
+        }
+
+        // __NR_clock_gettime64
+        case 0x193: {
+            if PRINT_SYSCALL {
+                printTid()
+                text_mode_println("clock gettime 64 syscall")
+            }
+            ret = ^uint32(syscall.EINVAL)+1
+
         }
 
         default: unsupportedSyscall()
