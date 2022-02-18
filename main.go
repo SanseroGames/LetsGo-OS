@@ -6,7 +6,9 @@ import (
 )
 
 var progs = [...]string {
-    "/usr/hellorust",
+    "/usr/helloc",
+    "/usr/hellocxx",
+    "/usr/hellogo",
 }
 
 var domains [len(progs)]domain

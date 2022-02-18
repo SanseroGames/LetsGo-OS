@@ -1,5 +1,21 @@
 #include "textflag.h"
 
+TEXT ·scheduleStack(SB),NOSPLIT,$0-4
+    MOVL fn+0(FP), DI
+    MOVL main·scheduleThread_kernelStack_hi(SB), AX
+    
+    MOVL SP, (taskswitchbuf_sp)(AX)
+
+    MOVL AX, SP
+
+    MOVL DI, DX
+    MOVL 0(DI), DI
+    CALL DI
+
+    MOVL (taskswitchbuf_sp)
+
+    RET
+
 TEXT ·setDS(SB),NOSPLIT,$0
     MOVL ·ds_segment+0(FP), AX
     MOVW AX, DS

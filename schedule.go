@@ -44,6 +44,10 @@ type stack struct {
     lo uintptr
 }
 
+type taskswitchbuf struct {
+    sp uintptr
+}
+
 type thread struct {
     next *thread
     prev *thread
