@@ -72,6 +72,8 @@ func getIDT() *IdtDescriptor
 func EnableInterrupts()
 func DisableInterrupts()
 
+func scheduleStack(fn func())
+
 func setDS(ds_segment uint32)
 func setGS(gs_segment uint32)
 
