@@ -111,6 +111,12 @@ var (
 // Don't forget to multiply by 8. it is not array index.
 func flushTss(segmentIndex int)
 
+func kernelThreadInit() {
+    SetInterruptStack(currentThread.kernelStack.hi)
+    switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
+    JumpUserMode(currentThread.regs, currentThread.info)
+}
+
 func JumpUserMode (regs RegisterState, info InterruptInfo)
 
 func hackyGetFuncAddr(funcAddr func()) uintptr
@@ -129,7 +135,9 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
     Memclr(kernelStack, PAGE_SIZE)
     outThread.kernelStack.lo = kernelStack
     outThread.kernelStack.hi = kernelStack+PAGE_SIZE
+    outThread.kernelInfo.ESP = uint32(outThread.kernelStack.hi)
     targetDomain.MemorySpace.mapPage(kernelStack, kernelStack, PAGE_RW | PAGE_PERM_KERNEL)
+    outThread.kernelInfo.EIP = uint32(hackyGetFuncAddr(kernelThreadInit))
     outThread.info.CS = defaultUserSegments.cs | 3
     outThread.info.SS = defaultUserSegments.ss | 3
     outThread.regs.GS = defaultUserSegments.gs | 3

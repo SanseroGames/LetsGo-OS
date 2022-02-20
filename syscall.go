@@ -252,6 +252,7 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("nanosleep syscall")
             }
+            ret = ^uint32(syscall.EINVAL)+1
         }
         case syscall.SYS_EXIT_GROUP: {
             if PRINT_SYSCALL {
@@ -300,6 +301,8 @@ func linuxSyscallHandler(){
                 printTid()
                 text_mode_println("clock get time syscall")
             }
+            ret = ^uint32(syscall.ENOTSUP)+1
+
         }
 
         case syscall.SYS_RT_SIGPROCMASK: {
@@ -546,6 +549,7 @@ func linuxCloneSyscall(flags uint32, stack uint32) uint32 {
     Memclr(newThreadMem, PAGE_SIZE)
     newThread := (* thread)(unsafe.Pointer(newThreadMem))
     CreateNewThread(newThread, uintptr(stack), currentThread, currentThread.domain)
+    currentThread.domain.MemorySpace.mapPage(newThreadMem, newThreadMem, PAGE_RW | PAGE_PERM_KERNEL)
 
     currentThread.domain.AddThread(newThread)
     return newThread.tid

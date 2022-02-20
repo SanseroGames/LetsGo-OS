@@ -9,6 +9,7 @@ var progs = [...]string {
     "/usr/helloc",
     "/usr/hellocxx",
     "/usr/hellogo",
+    "/usr/hellorust",
 }
 
 var domains [len(progs)]domain
@@ -90,9 +91,7 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
     if currentThread == nil {
         kernelPanic("I expect AddDomain to set currentThread variable")
     }
-    SetInterruptStack(currentThread.kernelStack.hi)
-    switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
-    JumpUserMode(currentThread.regs, currentThread.info)
+    kernelThreadInit()
     kernelPanic("Could not jump to user space :/")
 
 }

@@ -1,20 +1,28 @@
 #include "textflag.h"
+#include "go_asm.h"
+
+TEXT scheduleStackReturn(SB),NOSPLIT,$0
+    RET
 
 TEXT ·scheduleStack(SB),NOSPLIT,$0-4
     MOVL fn+0(FP), DI
-    MOVL main·scheduleThread_kernelStack_hi(SB), AX
-    
-    MOVL SP, (taskswitchbuf_sp)(AX)
+    MOVL main·currentThread(SB), AX
 
-    MOVL AX, SP
+    MOVL SP, (thread_kernelInfo+InterruptInfo_ESP)(AX)
+    MOVL $scheduleStackReturn(SB), (thread_kernelInfo+InterruptInfo_EIP)(AX)
+
+    MOVL $·scheduleThread(SB), AX
+    MOVL (thread_kernelStack+stack_hi)(AX), SP
 
     MOVL DI, DX
     MOVL 0(DI), DI
     CALL DI
 
-    MOVL (taskswitchbuf_sp)
+    MOVL main·currentThread(SB), AX
+    MOVL (thread_kernelInfo+InterruptInfo_ESP)(AX), SP
+    MOVL (thread_kernelInfo+InterruptInfo_EIP)(AX), DI
 
-    RET
+    JMP DI
 
 TEXT ·setDS(SB),NOSPLIT,$0
     MOVL ·ds_segment+0(FP), AX

@@ -101,7 +101,17 @@ func do_isr(regs RegisterState, info InterruptInfo){
     } else {
         if regs.KernelESP > uint32(currentThread.kernelStack.hi) ||
             regs.KernelESP < uint32(currentThread.kernelStack.lo) {
-            kernelPanic("kernel stack for process is out of range")
+            text_mode_print_errorln("kernel stack for process is out of range")
+            text_mode_print("KernelESP: ")
+            text_mode_print_hex32(regs.KernelESP)
+            text_mode_print(" Stack Hi: ")
+            text_mode_print_hex32(uint32(currentThread.kernelStack.hi))
+            text_mode_print(" Stack Low: ")
+            text_mode_print_hex32(uint32(currentThread.kernelStack.lo))
+            text_mode_print("\n TSS ESP0: ")
+            text_mode_print_hex32(tss.esp0)
+            text_mode_println("")
+            kernelPanic("Fix pls")
         }
         currentThread.info = info
         currentThread.regs = regs
@@ -121,10 +131,9 @@ func do_isr(regs RegisterState, info InterruptInfo){
     } else {
         if PerformSchedule {
             PerformSchedule = false
-            // Let PIT make a schedule
-            EnableInterrupts()
-            Hlt()
-            DisableInterrupts()
+            scheduleStack(func(){
+                Schedule()
+            })
         }
         info = currentThread.info
         regs = currentThread.regs
@@ -149,10 +158,7 @@ func defaultHandler(){
     text_mode_print("Exception code: ")
     text_mode_print_hex32(currentThread.info.ExceptionCode)
     text_mode_print_char(0xa)
-    text_mode_print("EIP: ")
-    text_mode_print_hex32(currentThread.info.EIP)
-    DisableInterrupts()
-    Hlt()
+    kernelPanic("fix pls")
 }
 
 func InitInterrupts(){
