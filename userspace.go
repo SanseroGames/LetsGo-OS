@@ -2,6 +2,7 @@ package main
 
 import (
     "unsafe"
+    "runtime"
 )
 
 type _func struct {
@@ -36,19 +37,13 @@ type funcInfo struct {
 	datap *moduledata
 }
 
-func cfuncname(f funcInfo) *byte {
-	if f.nameoff == 0 {
-		return nil
-	}
-	return &f.datap.funcnametab[f.nameoff]
+func (f funcInfo) _Func() *runtime.Func {
+	return (*runtime.Func)(unsafe.Pointer(f._func))
 }
 
-func funcname(f funcInfo) string {
-	return gostringnocopy(cfuncname(f))
+func (f funcInfo) valid() bool {
+	return f._func != nil
 }
-
-//go:linkname gostringnocopy runtime.gostringnocopy
-func gostringnocopy(str *byte) string
 
 //go:linkname findfuncTest runtime.findfunc
 func findfuncTest(pc uintptr) funcInfo

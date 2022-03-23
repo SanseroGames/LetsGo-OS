@@ -3,13 +3,11 @@ package main
 import (
 	"unsafe"
     "reflect"
+    "path"
 )
 
 var progs = [...]string {
-    "/usr/helloc",
-    "/usr/hellocxx",
     "/usr/hellogo",
-    "/usr/hellorust",
 }
 
 var domains [len(progs)]domain
@@ -107,14 +105,21 @@ func gpfPanic(){
 
 func printFuncName(pc uintptr) {
     f := findfuncTest(pc)
-    if f._func == nil {
+    if !f.valid() {
         text_mode_print("func: ")
         text_mode_print_hex32(uint32(pc))
         text_mode_println("\n")
         return
     }
-    s := funcname(f)
-    text_mode_println(s)
+    s := f._Func().Name()
+    text_mode_print(s)
+    text_mode_print(" (")
+    file, line := f._Func().FileLine(pc)
+    _, filename := path.Split(file)
+    text_mode_print(filename)
+    text_mode_print(":")
+    text_mode_print_hex32(uint32(line))
+    text_mode_println(")")
 }
 
 func panicHelper(thread *thread){
@@ -143,17 +148,10 @@ func panicHelper(thread *thread){
 func kernelPanic(msg string)
 //go:nosplit
 func do_kernelPanic(caller uintptr, msg string) {
-    f := findfuncTest(caller)
     text_mode_print_errorln(msg)
     text_mode_print_errorln("kernel panic :(\n")
     text_mode_print("Called from function: ")
-    if f._func == nil {
-        text_mode_print_hex32(uint32(caller))
-    } else {
-        s := funcname(f)
-        text_mode_print(s)
-    }
-    text_mode_println("")
+    printFuncName(caller-4) // account fo the fact that caller points to the instruction after the call
     if currentThread != nil {
         panicHelper(currentThread)
     }
@@ -164,7 +162,8 @@ func do_kernelPanic(caller uintptr, msg string) {
 
 func printThreadRegisters(t *thread) {
     text_mode_println("User regs:       Kernel regs:")
-    printRegisterLine("EIP: ", t.info.EIP, t.kernelInfo.EIP)
+    f := findfuncTest(uintptr(t.kernelInfo.EIP))
+    printRegisterLineInfo("EIP: ", t.info.EIP, t.kernelInfo.EIP, f._Func().Name())
     printRegisterLine("ESP: ", t.info.ESP, t.kernelInfo.ESP)
     printRegisterLine("EBP: ", t.regs.EBP, t.kernelRegs.EBP)
     printRegisterLine("EAX: ", t.regs.EAX, t.kernelRegs.EAX)
@@ -176,11 +175,21 @@ func printThreadRegisters(t *thread) {
 }
 
 func printRegisterLine(label string, userReg, kernelReg uint32) {
+    printRegisterLineInfo(label, userReg, kernelReg, "")
+}
+
+
+func printRegisterLineInfo(label string, userReg, kernelReg uint32, s string) {
     text_mode_print(label)
     text_mode_print_hex32(userReg)
     text_mode_print("    ")
     text_mode_print(label)
     text_mode_print_hex32(kernelReg)
+    if s != "" {
+        text_mode_print(" (")
+        text_mode_print(s)
+        text_mode_print(")")
+    }
     text_mode_println("")
 }
 

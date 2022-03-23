@@ -2,6 +2,7 @@ package main
 
 import (
     "unsafe"
+    "path"
 )
 
 const (
@@ -57,10 +58,17 @@ func pageFaultHandler() {
     causingAddr := getPageFaultAddr()
     text_mode_print_hex32(causingAddr)
     f := findfuncTest(uintptr(causingAddr))
-    if f._func != nil {
+    if f.valid() {
         text_mode_print(" (")
-        s := funcname(f)
+        s := f._Func().Name()
         text_mode_print(s)
+        text_mode_print(" (")
+        file, line := f._Func().FileLine(uintptr(causingAddr))
+        _, filename := path.Split(file)
+        text_mode_print(filename)
+        text_mode_print(":")
+        text_mode_print_hex32(uint32(line))
+        text_mode_println(")")
         text_mode_print(")")
     }
     text_mode_println("")
