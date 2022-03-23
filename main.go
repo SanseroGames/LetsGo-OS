@@ -7,7 +7,10 @@ import (
 )
 
 var progs = [...]string {
+    "/usr/helloc",
+    "/usr/hellocxx",
     "/usr/hellogo",
+    "/usr/hellorust",
 }
 
 var domains [len(progs)]domain
@@ -101,13 +104,9 @@ func printFuncName(pc uintptr) {
     }
     s := f._Func().Name()
     text_mode_print(s)
-    text_mode_print(" (")
     file, line := f._Func().FileLine(pc)
     _, filename := path.Split(file)
-    text_mode_print(filename)
-    text_mode_print(":")
-    text_mode_print_hex32(uint32(line))
-    text_mode_println(")")
+    kprintln(" (", filename, ":", line, ")")
 }
 
 func panicHelper(thread *thread){

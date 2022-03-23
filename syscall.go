@@ -321,8 +321,8 @@ func linuxSyscallHandler(){
 
         case syscall.SYS_RT_SIGACTION: {
             if PRINT_SYSCALL {
-                //printTid()
-                //text_mode_println("rt sigaction syscall")
+                printTid()
+                text_mode_println("rt sigaction syscall")
             }
         }
         case syscall.SYS_GETTID: {
@@ -550,8 +550,6 @@ func linuxCloneSyscall(flags uint32, stack uint32) uint32 {
     newThread := (* thread)(unsafe.Pointer(newThreadMem))
     CreateNewThread(newThread, uintptr(stack), currentThread, currentThread.domain)
     currentThread.domain.MemorySpace.mapPage(newThreadMem, newThreadMem, PAGE_RW | PAGE_PERM_KERNEL)
-
-    currentThread.domain.AddThread(newThread)
     return newThread.tid
 }
 

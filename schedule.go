@@ -20,6 +20,8 @@ type domain struct {
 
 func (d *domain) AddThread(t *thread) {
     t.domain = d
+    t.next = nil
+    t.prev = nil
     d.runningThreads.Enqueue(t)
     t.tid = d.nextTid
     d.nextTid++
@@ -109,6 +111,8 @@ func (l *threadList) Dequeue(t *thread) {
     }
     t.prev.next = t.next
     t.next.prev = t.prev
+    t.next = nil
+    t.prev = nil
 }
 
 type domainList struct {
@@ -213,7 +217,9 @@ func ResumeThread(t *thread) {
 
 func Schedule() {
     if currentDomain == nil {
-        kernelPanic("No Domains to schedule")
+        kerrorln("No Domains to schedule")
+        DisableInterrupts()
+        Hlt()
     }
     nextDomain := currentDomain.next
     newThread := nextDomain.runningThreads.Next()
@@ -225,16 +231,16 @@ func Schedule() {
             }
         }
     }
-    //text_mode_print("next domain: ")
-    //text_mode_print_hex32(nextDomain.pid)
-    //text_mode_println("")
-    //l := allDomains //l  for lazy
-    //for a := l.head; a != l.tail; a = a.next {
-    //    text_mode_print_hex32(a.pid)
-    //    text_mode_print(" ")
+    //if currentThread.next == currentThread && currentThread.tid != 0{
+    //    kernelPanic("Why no next?")
     //}
-    //text_mode_print_hex32(l.tail.pid)
-    //text_mode_println("")
+    //if newThread.tid == currentThread.tid && currentThread.tid != 0 {
+    //    kernelPanic("Why only one thread?")
+    //}
+    //kprintln("next domain: ", nextDomain.pid)
+    //kprintln("next thread: ", newThread.tid)
+    //kprintln("domain threads: ", nextDomain.numThreads)
+
 
     if newThread == nil {
         if kernelHlt {

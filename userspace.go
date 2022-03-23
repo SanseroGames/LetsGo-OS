@@ -151,7 +151,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
         copy(outThread.tlsSegments[TLS_START:], cloneThread.tlsSegments[TLS_START:])
     }
     if outThread.next != nil || outThread.prev != nil {
-        kernelPanic("Uninitialized next and prev")
+        kernelPanic("thread should not be in a list yet")
     }
     outThread.info.ESP = uint32(newStack)
     targetDomain.AddThread(outThread)
