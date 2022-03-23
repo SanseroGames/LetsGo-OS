@@ -27,10 +27,10 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
     s2 := "An Operating System written in the GO programming language"
     s3 := "It can't do much, but I hope you enjoy your stay"
 
-    text_mode_println(s)
-    text_mode_println(s2)
-    text_mode_println(s3)
-    text_mode_println("")
+    kprintln(s)
+    kprintln(s2)
+    kprintln(s3)
+    kprintln("")
 
     InitSegments()
 
@@ -67,25 +67,13 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
     for i := range domains {
         AddDomain(&domains[i])
     }
-
-    text_mode_print("domain size: ")
-    text_mode_print_hex32(uint32(unsafe.Sizeof(domains[0])))
-    text_mode_print(" thread size: ")
-    text_mode_print_hex32(uint32(unsafe.Sizeof(threads[0])))
-    text_mode_print(" total: ")
-    text_mode_print_hex32(uint32(unsafe.Sizeof(domains[0]))+uint32(unsafe.Sizeof(threads[0])))
-    text_mode_println("")
-    text_mode_print("stack start: ")
-    text_mode_print_hex32(uint32(scheduleThread.kernelStack.hi))
-    text_mode_print("stack end: ")
-    text_mode_print_hex32(uint32(scheduleThread.kernelStack.lo))
-    text_mode_println("")
-
-    text_mode_print("info: ")
-    text_mode_print_hex32(uint32(unsafe.Sizeof(currentThread.info)))
-    text_mode_print("regs: ")
-    text_mode_print_hex32(uint32(unsafe.Sizeof(currentThread.regs)))
-    text_mode_println("")
+    kprintln("domain size: ", uint(unsafe.Sizeof(domains[0])),
+                " thread_size: ", uint(unsafe.Sizeof(threads[0])),
+                " total: ", uint(unsafe.Sizeof(domains[0]) + unsafe.Sizeof(threads[0])))
+    kprintln("stack start: ", uintptr(scheduleThread.kernelStack.hi),
+                " stack end: ", uintptr(scheduleThread.kernelStack.lo))
+    kprintln("info: ", uint(unsafe.Sizeof(currentThread.info)),
+                " regs: ", uint(unsafe.Sizeof(currentThread.regs)))
     if currentThread == nil {
         kernelPanic("I expect AddDomain to set currentThread variable")
     }

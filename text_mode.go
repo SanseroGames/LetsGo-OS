@@ -5,6 +5,22 @@ import (
     "unsafe"
 )
 
+type text_mode_writer struct {
+}
+
+func (e text_mode_writer) Write(p []byte) (int, error) {
+    text_mode_print_bytes(p)
+    return len(p), nil
+}
+
+type text_mode_error_writer struct {
+}
+
+func (e text_mode_error_writer) Write(p []byte) (int, error) {
+    text_mode_print_error_bytes(p)
+    return len(p), nil
+}
+
 const (
 	fbWidth            = 80
 	fbHeight           = 25
@@ -87,6 +103,18 @@ func text_mode_println_col(s string, attr uint8){
 func text_mode_print(s string) {
     for _, b := range s {
         text_mode_print_char(uint8(b))
+    }
+}
+
+func text_mode_print_bytes(a []byte) {
+    for _, b := range a {
+        text_mode_print_char(uint8(b))
+    }
+}
+
+func text_mode_print_error_bytes(a []byte) {
+    for _, b := range a {
+        text_mode_print_char_col(uint8(b), 4<<4 | 0xf)
     }
 }
 
