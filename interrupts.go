@@ -21,7 +21,7 @@ type IdtDescriptor struct {
 type InterruptInfo struct {
      InterruptNumber uint32
      ExceptionCode uint32
-     EIP uint32
+     EIP uintptr
      CS uint32
      EFLAGS uint32
      ESP uint32

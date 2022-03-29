@@ -132,7 +132,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
     outThread.kernelStack.hi = kernelStack+PAGE_SIZE
     outThread.kernelInfo.ESP = uint32(outThread.kernelStack.hi)
     targetDomain.MemorySpace.mapPage(kernelStack, kernelStack, PAGE_RW | PAGE_PERM_KERNEL)
-    outThread.kernelInfo.EIP = uint32(hackyGetFuncAddr(kernelThreadInit))
+    outThread.kernelInfo.EIP = hackyGetFuncAddr(kernelThreadInit)
     outThread.info.CS = defaultUserSegments.cs | 3
     outThread.info.SS = defaultUserSegments.ss | 3
     outThread.regs.GS = defaultUserSegments.gs | 3
@@ -194,7 +194,7 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
         stack[index] = n.Type
         stack[index+1] = n.Value
     }
-    outMainThread.info.EIP = elfHdr.Entry
+    outMainThread.info.EIP = uintptr(elfHdr.Entry)
     outMainThread.info.ESP = uint32(defaultStackStart) - 4 - uint32(vecByteSize) -4-4-4
     return 0
 }

@@ -118,10 +118,9 @@ func panicHelper(thread *thread){
     text_mode_println("")
     if kernelInterrupt {
         text_mode_print("In kernel function: ")
-        printFuncName(uintptr(thread.kernelInfo.EIP))
+        printFuncName(thread.kernelInfo.EIP)
     } else {
-        text_mode_print("In user function: ")
-        text_mode_print_hex32(thread.info.EIP)
+        kprint("In user function: ", thread.info.EIP)
     }
     text_mode_println("")
     printThreadRegisters(thread)
@@ -150,7 +149,8 @@ func do_kernelPanic(caller uintptr, msg string) {
 func printThreadRegisters(t *thread) {
     text_mode_println("User regs:       Kernel regs:")
     f := findfuncTest(uintptr(t.kernelInfo.EIP))
-    printRegisterLineInfo("EIP: ", t.info.EIP, t.kernelInfo.EIP, f._Func().Name())
+    kprintln("EIP: ", t.info.EIP, "    ", t.kernelInfo.EIP, f._Func().Name())
+    //rintRegisterLineInfo("EIP: ", t.info.EIP, t.kernelInfo.EIP, f._Func().Name())
     printRegisterLine("ESP: ", t.info.ESP, t.kernelInfo.ESP)
     printRegisterLine("EBP: ", t.regs.EBP, t.kernelRegs.EBP)
     printRegisterLine("EAX: ", t.regs.EAX, t.kernelRegs.EAX)
@@ -182,7 +182,7 @@ func printRegisterLineInfo(label string, userReg, kernelReg uint32, s string) {
 
 func printRegisters(info *InterruptInfo, regs *RegisterState){
     text_mode_print("EIP: ")
-    text_mode_print_hex32(info.EIP)
+    text_mode_print_hex32(uint32(info.EIP))
     text_mode_print_char(0x0a)
     text_mode_print("EAX: ")
     text_mode_print_hex32(regs.EAX)
