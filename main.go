@@ -120,9 +120,8 @@ func panicHelper(thread *thread){
         text_mode_print("In kernel function: ")
         printFuncName(thread.kernelInfo.EIP)
     } else {
-        kprint("In user function: ", thread.info.EIP)
+        kprintln("In user function: ", thread.info.EIP)
     }
-    text_mode_println("")
     printThreadRegisters(thread)
     DisableInterrupts()
     Hlt()
@@ -139,7 +138,7 @@ func do_kernelPanic(caller uintptr, msg string) {
     text_mode_print("Called from function: ")
     printFuncName(caller-4) // account fo the fact that caller points to the instruction after the call
     if currentThread != nil {
-        panicHelper(currentThread)
+        //panicHelper(currentThread)
     }
     DisableInterrupts()
     Hlt()

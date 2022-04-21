@@ -76,9 +76,10 @@ func text_mode_flush_screen(){
 
 func text_mode_check_fb_move(){
     for fbCurLine >= fbHeight{
-        for i := 1; i<fbHeight; i++{
-            copy(fb[(i-1)*fbWidth:(i-1)*fbWidth+fbWidth], fb[i*fbWidth:i*fbWidth+fbWidth])
-        }
+        copy(fb[:len(fb)-fbWidth], fb[fbWidth:])
+        //for i := 1; i<fbHeight; i++{
+        //    copy(fb[(i-1)*fbWidth:(i-1)*fbWidth+fbWidth], fb[i*fbWidth:i*fbWidth+fbWidth])
+        //}
         for i:=0; i < fbWidth; i++{
             fb[(fbHeight-1)*fbWidth + i] = 0xf00
         }

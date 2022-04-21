@@ -73,9 +73,10 @@ type statxData struct {
 }
 
 type syscallHandler func(syscallArgs) (uint32, syscall.Errno)
-type syscallList struct {
+type syscallEntry struct {
     handler syscallHandler
     name string
+    numberOfArgs byte
 }
 
 type syscallArgs struct {
@@ -157,8 +158,11 @@ var (
         domainname: [_UTSNAME_LENGTH]byte{0},
     }
 
-    // Currently this wastes an awful lot of memory, but maps don't work. They don't initialise themself...
-    registeredSyscalls = [0x200]syscallList{}
+    // As I don't implement the full set of linux syscalls I try to save memory by using a lookup in a pointer table
+    // and not sort them in the list.
+    registeredSyscalls = [0x200](*syscallEntry){}
+    syscallListRaw = [64]syscallEntry{}
+    syscallList = []syscallEntry{}
     okHandler = func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS}
     invalHandler = func(args syscallArgs) (uint32, syscall.Errno) {return 0, syscall.EINVAL}
 )
@@ -171,11 +175,18 @@ func syscalltest(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func RegisterSyscall(number int, name string, handler syscallHandler) {
-    registeredSyscalls[number] = syscallList{handler: handler, name: name}
+    if (len(syscallList) == cap(syscallList)) {
+        kernelPanic("Too many syscalls registered")
+    }
+    syscallList = append(syscallList, syscallEntry{handler: handler, name: name, numberOfArgs: 0})
+    registeredSyscalls[number] = &syscallList[len(syscallList) -1]
 }
 
 func InitSyscall() {
     SetInterruptHandler(0x80, linuxSyscallHandler, KCS_SELECTOR, PRIV_USER)
+
+    // Somehow this does not work when written in the variables above
+    syscallList = syscallListRaw[:0]
 
     RegisterSyscall(syscall.SYS_WRITE, "write syscall", linuxWriteSyscall)
     RegisterSyscall(syscall.SYS_WRITEV, "writeV syscall", linuxWriteVSyscall)
