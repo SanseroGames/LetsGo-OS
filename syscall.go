@@ -6,7 +6,7 @@ import (
     "syscall"
 )
 
-const PRINT_SYSCALL = true
+const PRINT_SYSCALL = false
 
 type ioVec struct {
     iovBase uintptr    /* Starting address */
@@ -160,7 +160,7 @@ var (
 
     // As I don't implement the full set of linux syscalls I try to save memory by using a lookup in a pointer table
     // and not sort them in the list.
-    registeredSyscalls = [0x200](*syscallEntry){}
+    registeredSyscalls = [0x200](byte){}
     syscallListRaw = [64]syscallEntry{}
     syscallList = []syscallEntry{}
     okHandler = func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS}
@@ -179,7 +179,7 @@ func RegisterSyscall(number int, name string, handler syscallHandler) {
         kernelPanic("Too many syscalls registered")
     }
     syscallList = append(syscallList, syscallEntry{handler: handler, name: name, numberOfArgs: 0})
-    registeredSyscalls[number] = &syscallList[len(syscallList) -1]
+    registeredSyscalls[number] = byte(len(syscallList)) // add 1 to distinguish uninitialized
 }
 
 func InitSyscall() {
@@ -229,7 +229,7 @@ func InitSyscall() {
     RegisterSyscall(0x163, "get random syscall", invalHandler)
     RegisterSyscall(0x17f, "statx syscall", linuxStatxSyscall)
     RegisterSyscall(0x180, "arch ptrctl syscall", invalHandler)
-    //TODO: RegisterSyscall(0x182, "unknown syscall", invalHandler)
+    RegisterSyscall(0x182, "rseq syscall", invalHandler)
     RegisterSyscall(0x193, "clock gettime 64 syscall", invalHandler)
 }
 
@@ -270,11 +270,12 @@ func linuxSyscallHandler() {
         kernelPanic("Why is the kernel making a syscall?")
         }
     }
-    handler := registeredSyscalls[syscallNr]
-    if handler == nil || handler.handler == nil{
+    handlerIdx := registeredSyscalls[syscallNr]
+    if handlerIdx == 0 {
         unsupportedSyscall()
         return
     }
+    handler := syscallList[handlerIdx-1]
     if PRINT_SYSCALL {
         kprintln("pid: ",
                 currentThread.domain.pid,

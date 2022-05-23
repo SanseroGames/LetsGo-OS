@@ -171,6 +171,8 @@ func kFprint(w io.Writer, args ...interface{}){
             printuintptr(w, t)
         case unsafe.Pointer:
             printpointer(w, t)
+        case byte:
+            printuint(w, uint64(t))
         case uint:
             printuint(w, uint64(t))
         case uint32:
