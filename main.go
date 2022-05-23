@@ -138,7 +138,7 @@ func do_kernelPanic(caller uintptr, msg string) {
     text_mode_print("Called from function: ")
     printFuncName(caller-4) // account fo the fact that caller points to the instruction after the call
     if currentThread != nil {
-        //panicHelper(currentThread)
+        panicHelper(currentThread)
     }
     DisableInterrupts()
     Hlt()
@@ -148,7 +148,7 @@ func do_kernelPanic(caller uintptr, msg string) {
 func printThreadRegisters(t *thread) {
     text_mode_println("User regs:       Kernel regs:")
     f := findfuncTest(uintptr(t.kernelInfo.EIP))
-    kprintln("EIP: ", t.info.EIP, "    ", t.kernelInfo.EIP, f._Func().Name())
+    kprintln("EIP: ", t.info.EIP, "   ", "EIP: ", t.kernelInfo.EIP, " ", f._Func().Name())
     //rintRegisterLineInfo("EIP: ", t.info.EIP, t.kernelInfo.EIP, f._Func().Name())
     printRegisterLine("ESP: ", t.info.ESP, t.kernelInfo.ESP)
     printRegisterLine("EBP: ", t.regs.EBP, t.kernelRegs.EBP)

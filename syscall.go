@@ -6,7 +6,7 @@ import (
     "syscall"
 )
 
-const PRINT_SYSCALL = false
+const PRINT_SYSCALL = true
 
 type ioVec struct {
     iovBase uintptr    /* Starting address */
@@ -229,6 +229,7 @@ func InitSyscall() {
     RegisterSyscall(0x163, "get random syscall", invalHandler)
     RegisterSyscall(0x17f, "statx syscall", linuxStatxSyscall)
     RegisterSyscall(0x180, "arch ptrctl syscall", invalHandler)
+    //TODO: RegisterSyscall(0x182, "unknown syscall", invalHandler)
     RegisterSyscall(0x193, "clock gettime 64 syscall", invalHandler)
 }
 
@@ -270,7 +271,7 @@ func linuxSyscallHandler() {
         }
     }
     handler := registeredSyscalls[syscallNr]
-    if handler.handler == nil {
+    if handler == nil || handler.handler == nil{
         unsupportedSyscall()
         return
     }
@@ -281,8 +282,11 @@ func linuxSyscallHandler() {
                 currentThread.tid,
                 " :: ",
                 handler.name,
-                "(",
+                " (",
                 syscallNr,
+                " hex(",
+                uintptr(syscallNr),
+                ")",
                 ")")
     }
     ret, err = handler.handler(args)
@@ -685,10 +689,8 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 func unsupportedSyscall(){
     text_mode_print_char(0xa)
-    text_mode_print_errorln("Unsupported Linux Syscall received! Disabling Interrupts and halting")
-    text_mode_print("Syscall Number: ")
-    text_mode_print_hex32(currentThread.regs.EAX)
-    text_mode_println("")
+    text_mode_print_errorln("Unsupported Linux syscall received! Disabling interrupts and halting")
+    kprintln("Syscall Number: ", uintptr(currentThread.regs.EAX), " (", uint32(currentThread.regs.EAX), ")")
     panicHelper(currentThread)
 }
 
