@@ -200,6 +200,7 @@ func kFprint(w io.Writer, args ...interface{}){
 
 func kprint(args ...interface{}) {
     kFprint(defaultScreenWriter, args...)
+    kFprint(defaultLogWriter, args...)
 }
 
 func kprintln(args ...interface{}) {

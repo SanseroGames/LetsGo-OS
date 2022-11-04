@@ -4,6 +4,7 @@ import (
 	"unsafe"
     "reflect"
     "path"
+    "io"
 )
 
 var progs = [...]string {
@@ -86,131 +87,113 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 }
 
 func gpfPanic(){
-    text_mode_print_char(0xa)
-    text_mode_print_errorln("Received General Protection fault. Disabling Interrupts and halting")
-    text_mode_print("Errorcode: ")
-    text_mode_print_hex32(currentThread.info.ExceptionCode)
-    text_mode_println("")
+    kerrorln("\nReceived General Protection fault. Disabling Interrupts and halting")
+    kprintln("Errorcode: ", uintptr(currentThread.info.ExceptionCode))
     panicHelper(currentThread)
 }
 
 func printFuncName(pc uintptr) {
     f := findfuncTest(pc)
     if !f.valid() {
-        text_mode_print("func: ")
-        text_mode_print_hex32(uint32(pc))
-        text_mode_println("\n")
+        kprintln("func: ", pc)
         return
     }
     s := f._Func().Name()
-    text_mode_print(s)
     file, line := f._Func().FileLine(pc)
     _, filename := path.Split(file)
-    kprintln(" (", filename, ":", line, ")")
+    kprintln(s, " (", filename, ":", line, ")")
 }
 
 func panicHelper(thread *thread){
-    text_mode_print("Domain ID: ")
-    text_mode_print_hex(uint8(thread.domain.pid))
-    text_mode_println("")
-    text_mode_print("Thread ID: ")
-    text_mode_print_hex(uint8(thread.tid))
-    text_mode_println("")
+    kprintln("Domain ID: ", thread.domain.pid, ", Thread ID: ", thread.tid)
     if kernelInterrupt {
-        text_mode_print("In kernel function: ")
+        kprint("In kernel function: ")
         printFuncName(thread.kernelInfo.EIP)
     } else {
         kprintln("In user function: ", thread.info.EIP)
     }
-    printThreadRegisters(thread)
+    printThreadRegisters(thread, defaultScreenWriter)
+    printThreadRegisters(thread, defaultLogWriter)
     DisableInterrupts()
     Hlt()
 }
 
 // wrapper for do_kernelPanic that gets the return address
-// and pushers it on the stack and then jumps to do_kernelPanic
-// this messes up the stack but we don't return so it's no issue
+// and pushers it on the stack and then calls do_kernelPanic
 func kernelPanic(msg string)
 //go:nosplit
 func do_kernelPanic(caller uintptr, msg string) {
-    text_mode_print_errorln(msg)
-    text_mode_print_errorln("kernel panic :(\n")
-    text_mode_print("Called from function: ")
+    kerrorln("\n", msg, " - kernel panic :(")
+    kprint("Called from function: ")
     printFuncName(caller-4) // account fo the fact that caller points to the instruction after the call
     if currentThread != nil {
         panicHelper(currentThread)
+    } else {
+        kerrorln("No Running thread yet")
     }
     DisableInterrupts()
     Hlt()
     // does not return
 }
 
-func printThreadRegisters(t *thread) {
-    text_mode_println("User regs:       Kernel regs:")
+func printThreadRegisters(t *thread, w io.Writer) {
+    kFprint(w, "User regs:          Kernel regs:\n")
     f := findfuncTest(uintptr(t.kernelInfo.EIP))
-    kprintln("EIP: ", t.info.EIP, "   ", "EIP: ", t.kernelInfo.EIP, " ", f._Func().Name())
+    kFprint(w, "EIP: ", t.info.EIP, "      ", "EIP: ", t.kernelInfo.EIP, " ", f._Func().Name(), "\n")
     //rintRegisterLineInfo("EIP: ", t.info.EIP, t.kernelInfo.EIP, f._Func().Name())
-    printRegisterLine("ESP: ", t.info.ESP, t.kernelInfo.ESP)
-    printRegisterLine("EBP: ", t.regs.EBP, t.kernelRegs.EBP)
-    printRegisterLine("EAX: ", t.regs.EAX, t.kernelRegs.EAX)
-    printRegisterLine("EBX: ", t.regs.EBX, t.kernelRegs.EBX)
-    printRegisterLine("ECX: ", t.regs.ECX, t.kernelRegs.ECX)
-    printRegisterLine("EDX: ", t.regs.EDX, t.kernelRegs.EDX)
-    printRegisterLine("ESI: ", t.regs.ESI, t.kernelRegs.ESI)
-    printRegisterLine("EDI: ", t.regs.EDI, t.kernelRegs.EDI)
+    printRegisterLine(w, 20, "ESP: ", t.info.ESP, t.kernelInfo.ESP)
+    printRegisterLine(w, 20, "EBP: ", t.regs.EBP, t.kernelRegs.EBP)
+    printRegisterLine(w, 20, "EAX: ", t.regs.EAX, t.kernelRegs.EAX)
+    printRegisterLine(w, 20, "EBX: ", t.regs.EBX, t.kernelRegs.EBX)
+    printRegisterLine(w, 20, "ECX: ", t.regs.ECX, t.kernelRegs.ECX)
+    printRegisterLine(w, 20, "EDX: ", t.regs.EDX, t.kernelRegs.EDX)
+    printRegisterLine(w, 20, "ESI: ", t.regs.ESI, t.kernelRegs.ESI)
+    printRegisterLine(w, 20, "EDI: ", t.regs.EDI, t.kernelRegs.EDI)
+    printRegisterLine(w, 20, "EFLAGS: ", t.info.EFLAGS, t.kernelInfo.EFLAGS)
+    printRegisterLine(w, 20, "Exception: ", t.info.ExceptionCode, t.kernelInfo.ExceptionCode)
+    printRegisterLine(w, 20, "Interrupt: ", t.info.InterruptNumber, t.kernelInfo.InterruptNumber)
+    printRegisterLine(w, 20, "Krn ESP: ", t.regs.KernelESP, t.kernelRegs.KernelESP)
 }
 
-func printRegisterLine(label string, userReg, kernelReg uint32) {
-    printRegisterLineInfo(label, userReg, kernelReg, "")
-}
-
-
-func printRegisterLineInfo(label string, userReg, kernelReg uint32, s string) {
-    text_mode_print(label)
-    text_mode_print_hex32(userReg)
-    text_mode_print("    ")
-    text_mode_print(label)
-    text_mode_print_hex32(kernelReg)
-    if s != "" {
-        text_mode_print(" (")
-        text_mode_print(s)
-        text_mode_print(")")
+func printRegisterLine(w io.Writer, tablength int, label string, userReg, kernelReg uint32) {
+    firstLength := len(label)
+    kFprint(w, label, uintptr(userReg))
+    // pad number
+    firstLength += 3 // account for the hexadecimal 0x#
+    for i, n := firstLength, userReg >> 4; i < 20; i, n = i+1, n >> 4 {
+        if n == 0 {
+            kFprint(w, " ")
+        }
     }
-    text_mode_println("")
+    kFprint(w, label, uintptr(kernelReg), "\n")
 }
 
-func printRegisters(info *InterruptInfo, regs *RegisterState){
-    text_mode_print("EIP: ")
-    text_mode_print_hex32(uint32(info.EIP))
-    text_mode_print_char(0x0a)
-    text_mode_print("EAX: ")
-    text_mode_print_hex32(regs.EAX)
-    text_mode_print_char(0x0a)
-    text_mode_print("EBX: ")
-    text_mode_print_hex32(regs.EBX)
-    text_mode_print_char(0x0a)
-    text_mode_print("ECX: ")
-    text_mode_print_hex32(regs.ECX)
-    text_mode_print_char(0x0a)
-    text_mode_print("EDX: ")
-    text_mode_print_hex32(regs.EDX)
-    text_mode_print_char(0x0a)
-    text_mode_print("ESI: ")
-    text_mode_print_hex32(regs.ESI)
-    text_mode_print_char(0x0a)
-    text_mode_print("EDI: ")
-    text_mode_print_hex32(regs.EDI)
-    text_mode_print_char(0x0a)
-    text_mode_print("EBP: ")
-    text_mode_print_hex32(regs.EBP)
+
+func printRegisters(w io.Writer, info *InterruptInfo, regs *RegisterState){
+    kFprint(w, "Interrupt: ", uintptr(info.InterruptNumber), "\n")
+    kFprint(w, "Exception: ", uintptr(info.ExceptionCode), "\n")
+    kFprint(w, "EIP: ", uintptr(info.EIP), "\n")
+    kFprint(w, "CS: ", uintptr(info.CS), "\n")
+    kFprint(w, "EFLAGS: ", uintptr(info.EFLAGS), "\n")
+    kFprint(w, "ESP: ", uintptr(info.ESP), "\n")
+    kFprint(w, "SS: ", uintptr(info.SS), "\n")
+    kFprint(w, "-----------\n")
+    kFprint(w, "GS: ", uintptr(regs.GS), "\n")
+    kFprint(w, "FS: ", uintptr(regs.FS), "\n")
+    kFprint(w, "ES: ", uintptr(regs.ES), "\n")
+    kFprint(w, "DS: ", uintptr(regs.DS), "\n")
+    kFprint(w, "EBP: ", uintptr(regs.EBP), "\n")
+    kFprint(w, "EAX: ", uintptr(regs.EAX), "\n")
+    kFprint(w, "EBX: ", uintptr(regs.EBX), "\n")
+    kFprint(w, "ECX: ", uintptr(regs.ECX), "\n")
+    kFprint(w, "EDX: ", uintptr(regs.EDX), "\n")
+    kFprint(w, "ESI: ", uintptr(regs.ESI), "\n")
+    kFprint(w, "EDI: ", uintptr(regs.EDI), "\n")
+    kFprint(w, "KernelESP", uintptr(regs.KernelESP), "\n")
 }
 
-func printTid() {
-    text_mode_print("pid: ")
-    text_mode_print_hex(uint8(currentThread.domain.pid))
-    text_mode_print(" tid: ")
-    text_mode_print_hex(uint8(currentThread.tid))
-    text_mode_print(" ")
+func printTid(w io.Writer, t *thread) {
+    kFprint(w, "Pid: ", t.domain.pid, ", Tid: ", t.tid, "\n")
 }
 
 func debug_print_flags(flags uint8){

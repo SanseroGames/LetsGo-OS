@@ -73,6 +73,10 @@ type thread struct {
     kernelInfo InterruptInfo
     kernelRegs RegisterState
 
+    isKernelInterrupt bool
+    interruptedKernelEIP uintptr
+    interruptedKernelESP uint32
+
 
     // TLS
     tlsSegments [GDT_ENTRIES]GdtEntry
@@ -177,6 +181,7 @@ func restoreFpRegs(buffer uintptr)
 
 func AddDomain(d *domain) {
     allDomains.Append(d)
+    kdebugln("Added new domain with pid ", d.pid)
     if currentDomain == nil || currentThread == nil {
         currentDomain = allDomains.head
         currentThread = currentDomain.runningThreads.thread
@@ -206,10 +211,11 @@ func BlockThread(t *thread) {
     PerformSchedule = true
 }
 
+func getESP() uintptr
+func waitForInterrupt()
+
 func Block() {
-    EnableInterrupts()
-    Hlt()
-    DisableInterrupts()
+    waitForInterrupt()
 }
 
 func ResumeThread(t *thread) {
@@ -224,6 +230,8 @@ func Schedule() {
         DisableInterrupts()
         Hlt()
     }
+    //kdebug("Scheduling in ")
+    //printTid(defaultLogWriter, currentThread)
     nextDomain := currentDomain.next
     newThread := nextDomain.runningThreads.Next()
     if newThread == nil {
@@ -257,6 +265,7 @@ func Schedule() {
         kernelPanic("test")
         return
     }
+
     kernelHlt = false
     currentDomain = nextDomain
     if newThread == currentThread {
@@ -265,6 +274,8 @@ func Schedule() {
 
     switchToThread(newThread)
 
+    //kdebug("Now executing: ")
+    //printTid(defaultLogWriter, currentThread)
 }
 
 func switchToThread(t *thread) {

@@ -48,22 +48,19 @@ func getCurrentPageDir() *PageTable
 func getPageFaultAddr() uint32
 
 func pageFaultHandler() {
-    kerrorln("\nPage Fault! Disabling Interrupt and halting!\n")
-    kerrorln("Exception code: ", uintptr(currentThread.info.ExceptionCode))
+    kerrorln("\nPage Fault! Disabling Interrupt and halting!")
+    kprintln("Exception code: ", uintptr(currentThread.info.ExceptionCode))
     causingAddr := getPageFaultAddr()
-    kerror("Causing Address: ", uintptr(causingAddr))
+    kprint("Causing Address: ", uintptr(causingAddr))
     f := findfuncTest(uintptr(causingAddr))
     if f.valid() {
         s := f._Func().Name()
         file, line := f._Func().FileLine(uintptr(causingAddr))
         _, filename := path.Split(file)
-        kerror(" (", s, " (", filename, ":", line, ")", ")")
+        kprint(" (", s, " (", filename, ":", line, ")", ")")
     }
-    kerrorln("")
-    text_mode_println("")
-    text_mode_print("Current Page Directory: ")
-    text_mode_print_hex32(uint32((uintptr)(unsafe.Pointer(getCurrentPageDir()))))
-    text_mode_println("")
+    kprintln("")
+    kprintln("Current Page Directory: ", (uintptr)(unsafe.Pointer(getCurrentPageDir())))
     kernelPanic("Page Fault")
 }
 

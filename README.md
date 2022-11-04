@@ -15,6 +15,16 @@ so I wrote my own OS for this. Also for a long time I wanted to start learning G
 Go is not really designed to be used to write an operating system with it. But it is 
 still possoble, so why not do it? I just did not want to use C. The alternative would have been Rust but Rust is designed to be also used as a programming language for operating systems so Go is more a challange and thus more interesting. Still I plan to use Rust in my userspace.
 
+## Requirements
+- golang (duh)
+- nasm (used to build bootstrap x86 assembly)
+- gcc-multilib (OS targets 32bit so this lib is needed when compiled on 64bit platforms for user programs written in C)
+- g++-multilib (same as above but for C++ programs)
+- Rust (for user programs written in Rust)
+- qemu-system-i386 (Emulator used in the makefile. You can use a different x86 emulator if you want)
+- grub2 (Used to generate the boot media)
+- xorriso (used as well to generate the boot media)
+
 ## Inspirations used for this projects
 
 - [bare-metal-gophers](https://github.com/achilleasa/bare-metal-gophers) I used this project as a starting point for my project. The project was a demo project for a talk at GolangUK2017.

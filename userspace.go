@@ -96,6 +96,9 @@ const (
     TSS_32MODE = 1 << 3
     defaultStackPages = 16
     defaultStackStart = uintptr(0xffffc000)
+
+    EFLAGS_IF = 0x200 // interrupt flag. enable interrupts
+    EFLAGS_R = 0x2 // Reserved. always 1
 )
 
 var (
@@ -129,15 +132,20 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
     outThread.kernelStack.lo = kernelStack
     outThread.kernelStack.hi = kernelStack+PAGE_SIZE
     outThread.kernelInfo.ESP = uint32(outThread.kernelStack.hi)
-    targetDomain.MemorySpace.mapPage(kernelStack, kernelStack, PAGE_RW | PAGE_PERM_KERNEL)
     outThread.kernelInfo.EIP = hackyGetFuncAddr(kernelThreadInit)
+    outThread.kernelInfo.CS = KCS_SELECTOR
+    outThread.kernelInfo.SS = KDS_SELECTOR
+    outThread.kernelRegs.GS = KGS_SELECTOR
+    outThread.kernelInfo.EFLAGS = EFLAGS_R
+    targetDomain.MemorySpace.mapPage(kernelStack, kernelStack, PAGE_RW | PAGE_PERM_KERNEL)
+
     outThread.info.CS = defaultUserSegments.cs | 3
     outThread.info.SS = defaultUserSegments.ss | 3
     outThread.regs.GS = defaultUserSegments.gs | 3
     outThread.regs.FS = defaultUserSegments.fs | 3
     outThread.regs.ES = defaultUserSegments.es | 3
     outThread.regs.DS = defaultUserSegments.ds | 3
-    outThread.info.EFLAGS = 0x202
+    outThread.info.EFLAGS = EFLAGS_R | EFLAGS_IF
     if newStack != 0 {
         outThread.userStack.hi = newStack
         outThread.userStack.lo = newStack-16*0x1000
@@ -166,7 +174,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
     if outThread.next != nil || outThread.prev != nil {
         kernelPanic("thread should not be in a list yet")
     }
-        targetDomain.AddThread(outThread)
+    targetDomain.AddThread(outThread)
 }
 // Need pointer as this function should not do any memory allocations
 func StartProgram(path string, outDomain *domain, outMainThread *thread) int {

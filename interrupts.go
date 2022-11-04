@@ -47,6 +47,7 @@ type RegisterState struct {
 
 const (
     INTERRUPT_GATE = 0xE
+    PRINT_INTERRUPT_DEBUG = false
 )
 
 type InterruptHandler func()
@@ -60,6 +61,12 @@ var (
     kernelInterrupt = false
 )
 
+func interrupt_debug(args ...interface{}) {
+    if PRINT_INTERRUPT_DEBUG {
+        kdebugln(args)
+    }
+}
+
 func isrVector()
 
 // Actually an array of functions disguised as a function
@@ -72,7 +79,27 @@ func getIDT() *IdtDescriptor
 func EnableInterrupts()
 func DisableInterrupts()
 
-func scheduleStack(fn func())
+func scheduleStack(fn func(), noBackup bool)
+
+//go:nosplit
+func scheduleStackFail(caller uintptr){
+    kprint("Called from ")
+    printFuncName(caller-4)
+    kernelPanic("Called schedulestack on schedule stack")
+}
+
+//go:nosplit
+func stackFail(esp, failingAddress uintptr) {
+    setGS(KGS_SELECTOR)
+    setDS(KDS_SELECTOR)
+    kerrorln("Return from schedule stack to a location not in the kernel")
+    kprintln("Offending Address: ", failingAddress, ", ESP: ", esp)
+    kernelPanic("Fix pls")
+}
+
+func doubleStackReturn(){
+    kernelPanic("Returing from scheduleStack twice")
+}
 
 func setDS(ds_segment uint32)
 func setGS(gs_segment uint32)
@@ -84,6 +111,9 @@ func do_isr(regs RegisterState, info InterruptInfo){
 
     switchPageDir(kernelMemSpace.PageDirectory)
     SetInterruptStack(scheduleThread.kernelStack.hi)
+
+    //printRegisters(defaultLogWriter, &info, &regs)
+
     if regs.KernelESP < uint32(scheduleThread.kernelStack.lo) {
         // Test for scheduler stack underflow
         DisableInterrupts()
@@ -94,10 +124,15 @@ func do_isr(regs RegisterState, info InterruptInfo){
     }
 
     if info.CS == KCS_SELECTOR {
-        // We're on the scheduler stack
+        // We were interrupting the kernel
         currentThread.kernelInfo = info
         currentThread.kernelRegs = regs
-        kernelInterrupt = true
+        currentThread.isKernelInterrupt = true
+        currentThread.interruptedKernelEIP = info.EIP
+        currentThread.interruptedKernelESP = info.ESP
+        // Disable interrupts for interrupted kernel threads
+        currentThread.kernelInfo.EFLAGS &= 0xffffffff ^ EFLAGS_IF
+
     } else {
         if regs.KernelESP > uint32(currentThread.kernelStack.hi) ||
             regs.KernelESP < uint32(currentThread.kernelStack.lo) {
@@ -115,31 +150,59 @@ func do_isr(regs RegisterState, info InterruptInfo){
         }
         currentThread.info = info
         currentThread.regs = regs
-        kernelInterrupt = false
+        currentThread.isKernelInterrupt = false
     }
+
+    interrupt_debug("[INTERRUPT-IN] Debug infos")
+    if PRINT_INTERRUPT_DEBUG {
+        printTid(defaultLogWriter, currentThread)
+        printThreadRegisters(currentThread, defaultLogWriter)
+    }
+
     handlers[info.InterruptNumber]()
 
-    if info.CS == KCS_SELECTOR {
-        // We're on the scheduler stack
-        if PerformSchedule {
+    if PerformSchedule {
+        // If not already on schedule stack
+        if regs.KernelESP < uint32(scheduleThread.kernelStack.hi) && regs.KernelESP > uint32(scheduleThread.kernelStack.lo) {
+            // We're already on scheduler stack
+            interrupt_debug("Scheduling on schedule kernel thread ")
             Schedule()
-            PerformSchedule = false
-        }
-        info = currentThread.kernelInfo
-        regs = currentThread.kernelRegs
-
-    } else {
-        if PerformSchedule {
-            PerformSchedule = false
+        } else {
+            // We're on threads kernel stack
+            interrupt_debug("Scheduling on user kernel thread")
             scheduleStack(func(){
                 Schedule()
-            })
+            }, currentThread.isKernelInterrupt)
+            interrupt_debug("Performed schedule")
         }
+        PerformSchedule = false
+    }
+
+    interrupt_debug("[INTERRUPT-OUT] Debug infos")
+    if PRINT_INTERRUPT_DEBUG {
+        printTid(defaultLogWriter, currentThread)
+        printThreadRegisters(currentThread, defaultLogWriter)
+    }
+
+    if currentThread.isKernelInterrupt {
+        // We were interrupting the kernel
+        info = currentThread.kernelInfo
+        regs = currentThread.kernelRegs
+        info.EIP = currentThread.interruptedKernelEIP
+        info.ESP = currentThread.interruptedKernelESP
+        currentThread.isKernelInterrupt = false
+        interrupt_debug("Kernel return")
+    } else {
         info = currentThread.info
         regs = currentThread.regs
+        currentThread.isKernelInterrupt = false
         SetInterruptStack(currentThread.kernelStack.hi)
         switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
+        interrupt_debug("User return")
     }
+    interrupt_debug("[INTERRUPT-OUT] Returning to ", info.EIP, " with stack ", uintptr(info.ESP))
+
+
 }
 
 func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8){
@@ -150,14 +213,9 @@ func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8
 }
 
 func defaultHandler(){
-    text_mode_print_char(0xa)
-    text_mode_print_errorln("Unhandled interrupt! Disabling Interrupt and halting!")
-    text_mode_print("Interrupt number: ")
-    text_mode_print_hex(uint8(currentThread.info.InterruptNumber))
-    text_mode_print_char(0xa)
-    text_mode_print("Exception code: ")
-    text_mode_print_hex32(currentThread.info.ExceptionCode)
-    text_mode_print_char(0xa)
+    kerrorln("\nUnhandled interrupt! Disabling Interrupt and halting!")
+    kprintln("Interrupt number: ", currentThread.info.InterruptNumber)
+    kprintln("Exception code: ", uintptr(currentThread.info.ExceptionCode))
     kernelPanic("fix pls")
 }
 

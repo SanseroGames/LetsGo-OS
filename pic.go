@@ -22,7 +22,7 @@ var picHandlers [16]func()
 
 func PICInterruptHandler(){
     info := &currentThread.info
-    if kernelInterrupt {
+    if currentThread.isKernelInterrupt {
         info = &currentThread.kernelInfo
     }
     irq := info.InterruptNumber - uint32(PIC1Offset)
@@ -45,6 +45,7 @@ func PICInterruptHandler(){
         }
     }
 
+    //kdebugln("[PIC] Handler nr ", irq)
     picHandlers[irq]()
 
     if(irq >= 8){

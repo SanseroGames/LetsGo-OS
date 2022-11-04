@@ -85,7 +85,7 @@ go.o:
 $(BUILD_DIR)/arch/$(ARCH)/asm/%.o: arch/$(ARCH)/asm/%.s
 	@mkdir -p $(shell dirname $@)
 	@echo "[$(AS)] $<"
-	@$(AS) $(AS_FLAGS) $< -o $@
+	@$(AS) $(AS_FLAGS) $< -o $@ || exit 1
 
 iso: $(iso_target)
 
@@ -100,7 +100,7 @@ $(iso_target): $(kernel_target) usr
 	@a="$$(./dup.sh $(patsubst $(USR_BUILD_DIR)/%,/usr/%, $(wildcard $(USR_BUILD_DIR)/*)))"; sed -e "s#{MODULES}#$$a#g" arch/x86/script/grub.cfg.tpl | tr '@' '\n' > arch/x86/script/grub.cfg
 	@cp arch/$(ARCH)/script/grub.cfg $(BUILD_DIR)/isofiles/boot/grub
 
-	@grub-mkrescue -o $(iso_target) $(BUILD_DIR)/isofiles 2>&1 | sed -e "s/^/  | /g"
+	@grub-mkrescue -o $(iso_target) $(BUILD_DIR)/isofiles 2>&1 | sed -e "s/^/  | /g" || exit 1
 	@rm -r $(BUILD_DIR)/isofiles
 
 run: iso

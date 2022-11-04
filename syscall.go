@@ -6,7 +6,7 @@ import (
     "syscall"
 )
 
-const PRINT_SYSCALL = false
+const PRINT_SYSCALL = true
 
 type ioVec struct {
     iovBase uintptr    /* Starting address */
@@ -201,7 +201,7 @@ func InitSyscall() {
     RegisterSyscall(syscall.SYS_SCHED_GETAFFINITY, "sched get affinity syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0xffffffff, ESUCCESS})
     RegisterSyscall(syscall.SYS_NANOSLEEP, "nano sleep syscall", invalHandler)
     RegisterSyscall(syscall.SYS_EXIT_GROUP, "exit group syscall", linuxExitGroupSyscall)
-    RegisterSyscall(syscall.SYS_EXIT, "exit syscall", okHandler)
+    RegisterSyscall(syscall.SYS_EXIT, "exit syscall", linuxExitSyscall)
     RegisterSyscall(syscall.SYS_BRK, "brk syscall", linuxBrkSyscall)
     RegisterSyscall(syscall.SYS_MMAP2, "mmap2 syscall", linuxMmap2Syscall)
     RegisterSyscall(syscall.SYS_MINCORE, "mincore syscall", linuxMincoreSyscall)
@@ -232,8 +232,11 @@ func InitSyscall() {
     RegisterSyscall(0x182, "rseq syscall", invalHandler)
     RegisterSyscall(0x193, "clock gettime 64 syscall", invalHandler)
     RegisterSyscall(syscall.SYS_EPOLL_CREATE1, "epoll_create1 syscall", invalHandler)
+    RegisterSyscall(syscall.SYS_EPOLL_WAIT, "epoll wait syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS})
     RegisterSyscall(syscall.SYS_EPOLL_CREATE, "epoll_create syscall", linuxEpollCreateSyscall)
+    RegisterSyscall(syscall.SYS_WAIT4, "wait4 syscall", invalHandler)
     RegisterSyscall(syscall.SYS_FCNTL, "fctnl syscall", invalHandler)
+    RegisterSyscall(syscall.SYS_PRCTL, "prctl syscall", invalHandler)
     RegisterSyscall(syscall.SYS_PIPE2, "pipe2 syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS})
     RegisterSyscall(syscall.SYS_EPOLL_CTL, "epoll_ctl syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS})
     RegisterSyscall(syscall.SYS_DUP3, "dup3 syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS})
@@ -261,7 +264,7 @@ func linuxSyscallHandler() {
         arg5: currentThread.regs.EDI,
         arg6: currentThread.regs.EBP,
     }
-    if kernelInterrupt {
+    if currentThread.isKernelInterrupt {
         syscallNr = currentThread.kernelRegs.EAX
         args = syscallArgs{
             arg1: currentThread.kernelRegs.EBX,
@@ -271,12 +274,12 @@ func linuxSyscallHandler() {
             arg5: currentThread.kernelRegs.EDI,
             arg6: currentThread.kernelRegs.EBP,
         }
-        if false {
-        text_mode_print("kernel syscallnr: ")
-        text_mode_print_hex32(syscallNr)
-        text_mode_println("")
-        kernelPanic("Why is the kernel making a syscall?")
+        if syscallNr == syscall.SYS_WRITE {
+            // Write syscall. We probably upset the go runtime so it wants to complain
+            linuxWriteSyscall(args)
         }
+        kprintln("\nkernel syscallnr: ", syscallNr)
+        kernelPanic("Why is the kernel making a syscall?")
     }
     handlerIdx := registeredSyscalls[syscallNr]
     if handlerIdx == 0 {
@@ -333,8 +336,8 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
     if !currentThread.isFork {
         // We were not in a fork, so the process should be replaced
         // We simulate this by just exiting the current process
-        kernelPanic("Execve in non fork thread\n")
-        ExitDomain(currentThread.domain)
+        //kernelPanic("Execve in non fork thread")
+        //ExitDomain(currentThread.domain)
     } else {
         ExitThread(currentThread)
     }
@@ -356,6 +359,17 @@ func linuxExitGroupSyscall(args syscallArgs) (uint32, syscall.Errno) {
     // Already in new context so return value from last syscall from current domain
     return currentThread.regs.EAX, ESUCCESS
 }
+
+func linuxExitSyscall(args syscallArgs) (uint32, syscall.Errno) {
+    //text_mode_print("Exiting domain ")
+    //text_mode_print_hex(uint8(currentThread.domain.pid))
+    //text_mode_println("")
+    ExitThread(currentThread)
+    PerformSchedule = true
+    // Already in new context so return value from last syscall from current domain
+    return currentThread.regs.EAX, ESUCCESS
+}
+
 
 func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
     //dirfd := args.arg1
@@ -425,7 +439,7 @@ func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
     currentThread.domain.MemorySpace.mapPage(newThreadMem, newThreadMem, PAGE_RW | PAGE_PERM_KERNEL)
     if flags & _CLONE_THREAD == 0 {
         // This is probably temporary as I don't want to implement COW right now to create a new process
-        kdebug("[CLONE SYSCALL]Clone where the goal is not a thread does not behave like on linux")
+        kdebugln("[CLONE SYSCALL] Clone where the goal is not a thread does not behave like on linux")
         newThread.isFork = true
     }
     // Need to make this better at some point
@@ -636,6 +650,7 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
     fd := args.arg1
     text := args.arg2
     length := args.arg3
+    kdebugln("FD: ", fd)
     if fd < 1 || fd > 2 {
         return 0, syscall.EBADF
     }

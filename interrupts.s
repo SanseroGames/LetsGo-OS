@@ -2,17 +2,48 @@
 #include "go_asm.h"
 
 TEXT scheduleStackReturn(SB),NOSPLIT,$0
+    CLI
+    MOVL 0(SP), AX
+    MOVL SP, DX
+    CMPL AX, $0x200000
+    JG stackFail
     RET
+stackFail:
+    MOVL $·scheduleThread(SB), BX
+    MOVL (thread_kernelStack+stack_hi)(BX), SP
+    PUSHL AX
+    PUSHL DX
+    CALL ·stackFail(SB)
+    HLT
+
+TEXT doubleStackReturnWrapper(SB),NOSPLIT,$0
+    CLI
+    MOVL $·scheduleThread(SB), BX
+    MOVL (thread_kernelStack+stack_hi)(BX), SP
+    CALL ·doubleStackReturn(SB)
+    HLT
+ 
 
 TEXT ·scheduleStack(SB),NOSPLIT,$0-4
     MOVL fn+0(FP), DI
+
+    // Test if invokation is already in schedule stack
+    MOVL $·scheduleThread(SB), AX
+    MOVL (thread_kernelStack+stack_lo)(AX), BX
+    CMPL SP, BX
+    JL normal
+    MOVL (thread_kernelStack+stack_hi)(AX), BX
+    CMPL SP, BX
+    JL already_in_schedule_stack
+
+normal:
+
     MOVL main·currentThread(SB), AX
 
     MOVL SP, (thread_kernelInfo+InterruptInfo_ESP)(AX)
     MOVL $scheduleStackReturn(SB), (thread_kernelInfo+InterruptInfo_EIP)(AX)
 
-    MOVL $·scheduleThread(SB), AX
-    MOVL (thread_kernelStack+stack_hi)(AX), SP
+    MOVL BX, SP
 
     MOVL DI, DX
     MOVL 0(DI), DI
@@ -21,8 +52,19 @@ TEXT ·scheduleStack(SB),NOSPLIT,$0-4
     MOVL main·currentThread(SB), AX
     MOVL (thread_kernelInfo+InterruptInfo_ESP)(AX), SP
     MOVL (thread_kernelInfo+InterruptInfo_EIP)(AX), DI
+    MOVL $·doubleStackReturn(SB), (thread_kernelInfo+InterruptInfo_EIP)(AX)
 
     JMP DI
+
+already_in_schedule_stack:
+    //MOVL DI, DX
+    //MOVL 0(DI), DI
+    //CALL DI
+    //RET
+    MOVL 0(SP), AX
+    PUSHL AX
+    CALL ·scheduleStackFail(SB)
+    HLT
 
 TEXT ·setDS(SB),NOSPLIT,$0
     MOVL ·ds_segment+0(FP), AX
@@ -81,7 +123,7 @@ TEXT ·DisableInterrupts(SB), NOSPLIT,$0
     SUBL $4, SP                      \
     MOVL $num, (SP)                  \
     JMP ·isrVector(SB)               \
-    MOVL $0, 4(SP) // Make sure both versions are the same lenght (this could maye break)
+    MOVL $0, 4(SP) // Make sure both versions are the same lenght (this could maybe break)
 
 TEXT ·isrEntryList(SB), NOSPLIT, $0
     INT_ENTRY_WITHOUT_ERR_CODE(0)
