@@ -2,16 +2,21 @@ package main
 
 import (
     "fmt"
+    "os/exec"
 )
 
 func main() {
-    defer fmt.Println("I can use go features")
-    go fmt.Println("1")
-    go fmt.Println("2")
-    go fmt.Println("3")
-    go fmt.Println("4")
     fmt.Println("Hello go world")
-    test()
+    cmd := exec.Command("/usr/helloc")
+    cmd.Start()
+    defer fmt.Println("I can use go features")
+    //go fmt.Println("1")
+    //go fmt.Println("2")
+    //go fmt.Println("3")
+    //go fmt.Println("4")
+    fmt.Println("Bye go world")
+    //test()
+
 }
 
 func sum(s []int, c chan int) {

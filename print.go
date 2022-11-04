@@ -6,11 +6,13 @@ import (
     "reflect"
 )
 
+var (
+    defaultLogWriter io.Writer = &serialDevice
+    defaultScreenWriter io.Writer = text_mode_writer{}
+    defaultErrorWriter io.Writer = text_mode_error_writer{}
+)
+
 // Copied and adapted code from go runtime
-
-var defaultWriter = text_mode_writer{}
-var defaultErrorWriter = text_mode_error_writer{}
-
 func printsp(w io.Writer) {
 	printstring(w, " ")
 }
@@ -197,7 +199,7 @@ func kFprint(w io.Writer, args ...interface{}){
 }
 
 func kprint(args ...interface{}) {
-    kFprint(defaultWriter, args...)
+    kFprint(defaultScreenWriter, args...)
 }
 
 func kprintln(args ...interface{}) {
@@ -207,6 +209,7 @@ func kprintln(args ...interface{}) {
 
 func kerror(args ...interface{}) {
     kFprint(defaultErrorWriter, args...)
+    kFprint(defaultLogWriter, args...)
 }
 
 func kerrorln(args ...interface{}){
@@ -214,9 +217,18 @@ func kerrorln(args ...interface{}){
     kerror("\n")
 }
 
+func kdebug(args ...interface{}) {
+    kFprint(defaultLogWriter, args...)
+}
+
+func kdebugln(args ...interface{}) {
+    kdebug(args...)
+    kdebug("\n")
+}
+
 func writeWrapper(w io.Writer, p []byte) {
     if w == nil {
-        w = defaultWriter
+        w = defaultScreenWriter
     }
     w.Write(*(*[]byte)(noEscape(unsafe.Pointer(&p))))
 }

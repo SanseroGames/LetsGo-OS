@@ -124,8 +124,6 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
     newThreadAddr := (uintptr)(unsafe.Pointer(outThread))
     Memclr(newThreadAddr, int(unsafe.Sizeof(outThread)))
     outThread.fpOffset = 0xffffffff
-    outThread.userStack.hi = newStack
-    outThread.userStack.lo = newStack-16*0x1000
     kernelStack := allocPage()
     Memclr(kernelStack, PAGE_SIZE)
     outThread.kernelStack.lo = kernelStack
@@ -140,6 +138,16 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
     outThread.regs.ES = defaultUserSegments.es | 3
     outThread.regs.DS = defaultUserSegments.ds | 3
     outThread.info.EFLAGS = 0x202
+    if newStack != 0 {
+        outThread.userStack.hi = newStack
+        outThread.userStack.lo = newStack-16*0x1000
+        outThread.info.ESP = uint32(newStack)
+    } else {
+        outThread.userStack.hi = 0
+        outThread.userStack.lo = 0
+        outThread.info.ESP = 0
+    }
+
     if cloneThread != nil {
         outThread.info.CS = cloneThread.info.CS
         outThread.info.SS = cloneThread.info.SS
@@ -147,14 +155,18 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
         outThread.info.EFLAGS = cloneThread.info.EFLAGS
         outThread.regs = cloneThread.regs
         outThread.regs.EAX = 0
+        if newStack == 0 {
+            outThread.userStack.hi = cloneThread.userStack.hi
+            outThread.userStack.lo = cloneThread.userStack.lo
+            outThread.info.ESP = cloneThread.info.ESP
+        }
         //outThread.fpState = cloneThread.fpState
         copy(outThread.tlsSegments[TLS_START:], cloneThread.tlsSegments[TLS_START:])
     }
     if outThread.next != nil || outThread.prev != nil {
         kernelPanic("thread should not be in a list yet")
     }
-    outThread.info.ESP = uint32(newStack)
-    targetDomain.AddThread(outThread)
+        targetDomain.AddThread(outThread)
 }
 // Need pointer as this function should not do any memory allocations
 func StartProgram(path string, outDomain *domain, outMainThread *thread) int {

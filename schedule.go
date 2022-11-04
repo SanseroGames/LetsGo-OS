@@ -63,6 +63,9 @@ type thread struct {
     isBlocked bool
     waitAddress *uint32
 
+    // flag that shows that this thread would be handled as a new process in linux
+    isFork bool
+
     // Infos to stall a thread when switching
     info InterruptInfo
     regs RegisterState

@@ -7,10 +7,7 @@ import (
 )
 
 var progs = [...]string {
-    "/usr/helloc",
-    "/usr/hellocxx",
     "/usr/hellogo",
-    "/usr/hellorust",
 }
 
 var domains [len(progs)]domain
@@ -24,6 +21,7 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
         kernelPanic("No stack")
     }
     text_mode_init()
+    InitSerialDevice()
 
     text_mode_flush_screen()
     s :=  "Hi and welcome to Let's-Go OS"
@@ -34,6 +32,7 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
     kprintln(s2)
     kprintln(s3)
     kprintln("")
+    kdebugln("Starting initialization...")
 
     InitSegments()
 
@@ -57,6 +56,7 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
     InitUserMode(stackstart, stackend)
 
     text_mode_println_col("Initilaization complete", 0x2)
+    kdebugln("Initialization complete")
     //HdReadSector()
 
     var err int

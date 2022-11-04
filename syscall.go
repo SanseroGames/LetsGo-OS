@@ -192,7 +192,7 @@ func InitSyscall() {
     RegisterSyscall(syscall.SYS_WRITEV, "writeV syscall", linuxWriteVSyscall)
     RegisterSyscall(syscall.SYS_SET_THREAD_AREA, "set thread area syscall", linuxSetThreadAreaSyscall)
     RegisterSyscall(syscall.SYS_OPEN, "open syscall", linuxOpenSyscall)
-    RegisterSyscall(syscall.SYS_OPENAT, "open at syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, syscall.ENOSYS})
+    RegisterSyscall(syscall.SYS_OPENAT, "open at syscall", linuxOpenAtSyscall)
     RegisterSyscall(syscall.SYS_CLOSE, "close syscall", okHandler)
     RegisterSyscall(syscall.SYS_READ, "read syscall", linuxReadSyscall)
     RegisterSyscall(syscall.SYS_READLINK, "readlink syscall", okHandler)
@@ -231,6 +231,14 @@ func InitSyscall() {
     RegisterSyscall(0x180, "arch ptrctl syscall", invalHandler)
     RegisterSyscall(0x182, "rseq syscall", invalHandler)
     RegisterSyscall(0x193, "clock gettime 64 syscall", invalHandler)
+    RegisterSyscall(syscall.SYS_EPOLL_CREATE1, "epoll_create1 syscall", invalHandler)
+    RegisterSyscall(syscall.SYS_EPOLL_CREATE, "epoll_create syscall", linuxEpollCreateSyscall)
+    RegisterSyscall(syscall.SYS_FCNTL, "fctnl syscall", invalHandler)
+    RegisterSyscall(syscall.SYS_PIPE2, "pipe2 syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS})
+    RegisterSyscall(syscall.SYS_EPOLL_CTL, "epoll_ctl syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS})
+    RegisterSyscall(syscall.SYS_DUP3, "dup3 syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS})
+    RegisterSyscall(syscall.SYS_DUP2, "dup2 syscall", func(args syscallArgs) (uint32, syscall.Errno) {return 0, ESUCCESS})
+    RegisterSyscall(syscall.SYS_EXECVE, "execve syscall", linuxExecveSyscall)
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -277,7 +285,7 @@ func linuxSyscallHandler() {
     }
     handler := syscallList[handlerIdx-1]
     if PRINT_SYSCALL {
-        kprintln("pid: ",
+        kdebugln("pid: ",
                 currentThread.domain.pid,
                 " tid: ",
                 currentThread.tid,
@@ -295,6 +303,48 @@ func linuxSyscallHandler() {
         ret = ^uint32(err)+1
     }
     currentThread.regs.EAX = ret
+}
+
+func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
+    arr := args.arg1
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(arr))
+    if !ok {
+        kerrorln("Could not look up string pathname")
+        return 0, syscall.EFAULT
+    }
+    pathname := cstring(addr)
+
+    // Create new domain
+    newDomainMem := allocPage()
+    Memclr(newDomainMem, PAGE_SIZE)
+    newDomain := (* domain)(unsafe.Pointer(newDomainMem))
+    newThreadMem := allocPage()
+    Memclr(newThreadMem, PAGE_SIZE)
+    newThread := (* thread)(unsafe.Pointer(newThreadMem))
+    err := StartProgram(pathname, newDomain, newThread)
+    if err != 0 {
+        freePage(newDomainMem)
+        freePage(newThreadMem)
+        return 0, syscall.ENOENT
+    }
+    newDomain.MemorySpace.mapPage(newThreadMem, newThreadMem, PAGE_RW | PAGE_PERM_KERNEL)
+    AddDomain(newDomain)
+
+    if !currentThread.isFork {
+        // We were not in a fork, so the process should be replaced
+        // We simulate this by just exiting the current process
+        kernelPanic("Execve in non fork thread\n")
+        ExitDomain(currentThread.domain)
+    } else {
+        ExitThread(currentThread)
+    }
+    PerformSchedule = true
+    return currentThread.regs.EAX, ESUCCESS
+}
+
+func linuxEpollCreateSyscall(args syscallArgs) (uint32, syscall.Errno) {
+    // TODO
+    return 0, ESUCCESS
 }
 
 func linuxExitGroupSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -368,16 +418,17 @@ func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
     //text_mode_print(" child:")
     //text_mode_print_hex32(child_tid)
     //text_mode_println("")
-    if flags & _CLONE_THREAD == 0 {
-        text_mode_print_errorln("Clone where the goal is not a thread is not supported")
-        return 0, syscall.EINVAL
-    }
-    // Need to make this better at some point
     newThreadMem := allocPage()
     Memclr(newThreadMem, PAGE_SIZE)
     newThread := (* thread)(unsafe.Pointer(newThreadMem))
     CreateNewThread(newThread, uintptr(stack), currentThread, currentThread.domain)
     currentThread.domain.MemorySpace.mapPage(newThreadMem, newThreadMem, PAGE_RW | PAGE_PERM_KERNEL)
+    if flags & _CLONE_THREAD == 0 {
+        // This is probably temporary as I don't want to implement COW right now to create a new process
+        kdebug("[CLONE SYSCALL]Clone where the goal is not a thread does not behave like on linux")
+        newThread.isFork = true
+    }
+    // Need to make this better at some point
     return newThread.tid, ESUCCESS
 }
 
@@ -511,11 +562,35 @@ func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
 func linuxOpenSyscall(args syscallArgs) (uint32, syscall.Errno) {
     //path := args.arg1
     flags := args.arg2
-    _, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(flags))
+    addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(flags))
     if !ok {
         return 0, syscall.EFAULT
     }
-    //s := cstring(addr)
+    s := cstring(addr)
+    kdebugln("[SYS-OPEN] ", s)
+    //text_mode_println(s)
+    return 0, syscall.ENOSYS
+    //printRegisters(currentInfo, regs)
+
+}
+
+func linuxOpenAtSyscall(args syscallArgs) (uint32, syscall.Errno) {
+    fd := args.arg1
+    path := args.arg2
+    flags := args.arg3
+    pathaddr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(path))
+    if !ok {
+        return 0, syscall.EFAULT
+    }
+    s1 := cstring(pathaddr)
+    kdebugln("[SYS-OPENAT] fd:", fd)
+    kdebugln("[SYS-OPENAT] path:", s1)
+    kdebugln("[SYS-OPENAT] flags:", flags)
+
+    if s1 == "/dev/null" {
+        return 42, ESUCCESS
+    }
+
     //text_mode_println(s)
     return 0, syscall.ENOSYS
     //printRegisters(currentInfo, regs)
@@ -584,9 +659,9 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 
     if fd == 2 {
-        text_mode_print_error(s)
+        kerror(s)
     } else {
-        text_mode_print(s)
+        kprint(s)
     }
     return uint32(len(s)), ESUCCESS //TODO: nr of bytes written
 }
@@ -644,21 +719,21 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
     //text_mode_println("")
 
     if futex_op & FUTEX_PRIVATE_FLAG == 0 {
-        text_mode_print_error("Futex on shared futexes is not supported")
+        kerror("Futex on shared futexes is not supported")
         return 0, syscall.ENOSYS
     }
 
     addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(uaddr))
     if !ok {
-        text_mode_print_errorln("Could not look up read addr")
+        kerrorln("Could not look up read addr")
         return 0, syscall.EFAULT
     }
     futexAddr := (*uint32)(unsafe.Pointer(addr))
     switch (futex_op & 0xf) {
         case FUTEX_WAIT:
             if timeout != 0 {
-                text_mode_print_error("Timeouts are not supported yet")
-                return 0, syscall.ENOSYS
+                //kerrorln("Timeouts are not supported yet")
+                return 0, ESUCCESS//syscall.ENOSYS
             }
             // This should be atomically
             if val != *futexAddr {
@@ -681,16 +756,13 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
             }
             return woken, ESUCCESS
         default:
-            text_mode_print_error("Unsupported futex op")
-            text_mode_print_hex32(futex_op)
-            text_mode_println("")
+            kerrorln("Unsupported futex op", futex_op)
             return 0, syscall.ENOSYS
     }
 }
 
 func unsupportedSyscall(){
-    text_mode_print_char(0xa)
-    text_mode_print_errorln("Unsupported Linux syscall received! Disabling interrupts and halting")
+    kerrorln("\nUnsupported Linux syscall received! Disabling interrupts and halting")
     kprintln("Syscall Number: ", uintptr(currentThread.regs.EAX), " (", uint32(currentThread.regs.EAX), ")")
     panicHelper(currentThread)
 }
