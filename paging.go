@@ -23,11 +23,20 @@ const (
 var (
     freePagesList *page
     kernelMemSpace MemSpace = MemSpace{}
+    allocatedPages int = 0
 )
 
 type PageTable [ENTRIES_PER_TABLE]pageTableEntry
 
 type pageTableEntry uintptr
+
+func (e pageTableEntry) isPresent() bool {
+    return e & PAGE_PRESENT == 1
+}
+
+func (e *pageTableEntry) unsetPresent() {
+    *e = (*e) &^ PAGE_PRESENT
+}
 
 type page struct {
     next* page
@@ -74,11 +83,20 @@ func Memclr(p uintptr, n int) {
 
 func freePage(addr uintptr) {
     if addr % PAGE_SIZE != 0 {
+        kdebugln("[PAGE] WARNING: freeingPage but is not page aligned: ", addr)
         return
+    }
+    // Just to check for immediate double free
+    // If I were to check for double freeing correctly I would have to traverse the list
+    // everytime completely but that would make freeing O(n)
+    if addr == uintptr(unsafe.Pointer(freePagesList)) {
+        kdebugln("[Page] immediate double freeing page ", addr)
+        kernelPanic("[Page] double freeing page")
     }
     p := (*page)(unsafe.Pointer(addr))
     p.next = freePagesList
     freePagesList = p
+    allocatedPages--
 }
 
 func allocPage() uintptr {
@@ -87,6 +105,7 @@ func allocPage() uintptr {
     }
     p := freePagesList
     freePagesList = p.next
+    allocatedPages++
     return uintptr(unsafe.Pointer(p))
 }
 
@@ -104,12 +123,14 @@ func createNewPageDirectory() MemSpace {
 func (m *MemSpace) getPageTable(page uintptr) pageTableEntry {
     directoryIndex := page >> 22
     e := m.PageDirectory[directoryIndex]
-    if e & PAGE_PRESENT == 1{
+    if e.isPresent() {
         return e
     }
     // No pagetable present
     addr := allocPage()
     Memclr(addr, PAGE_SIZE)
+    // User perm here to allow all entries in page table to be possibly accessed by
+    // user. User does not have access to page table though.
     e = pageTableEntry(addr | PAGE_PRESENT | PAGE_RW | PAGE_PERM_USER)
     m.PageDirectory[directoryIndex] = e
     return e
@@ -120,7 +141,7 @@ func (m *MemSpace) tryMapPage(page uintptr, virtAddr uintptr, flags uint8) bool 
     pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
     pageIndex := virtAddr >> 12 & ((1 << 10) - 1)
     e := pta[pageIndex]
-    if e & PAGE_PRESENT == 1 {
+    if e.isPresent() {
         return false
     }
     e = pageTableEntry(page | uintptr(flags) | PAGE_PRESENT)
@@ -132,11 +153,7 @@ func (m *MemSpace) tryMapPage(page uintptr, virtAddr uintptr, flags uint8) bool 
 }
 
 func (m *MemSpace) mapPage(page uintptr, virtAddr uintptr, flags uint8) {
-        //text_mode_print("Mapping ")
-        //text_mode_print_hex32(uint32(page))
-        //text_mode_print(" -> ")
-        //text_mode_print_hex32(uint32(virtAddr))
-        //text_mode_println("")
+    //kdebugln("[PAGE] Mapping page ", page, " to virt addr ", virtAddr)
     if !m.tryMapPage(page, virtAddr, flags) {
         text_mode_print_errorln("Page already present")
         text_mode_print_hex32(uint32(page))
@@ -148,14 +165,17 @@ func (m *MemSpace) mapPage(page uintptr, virtAddr uintptr, flags uint8) {
 }
 
 func (m *MemSpace) unMapPage(virtAddr uintptr) {
+    //kdebugln("[PAGE] Unmapping page ", virtAddr)
     pt := m.getPageTable(virtAddr)
     pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
     pageIndex := virtAddr >> 12 & ((1 << 10) - 1)
     e := pta[pageIndex]
-    if e & PAGE_PRESENT == 1 {
+    if e.isPresent() {
         phAddr := uintptr(e &^ (PAGE_SIZE -1)) | (virtAddr & (PAGE_SIZE -1))
-        pta[pageIndex] = e &^ PAGE_PRESENT
+        pta[pageIndex].unsetPresent()
         freePage(phAddr)
+    } else {
+        //kdebugln("[PAGE] WARNING: Page was already unmapped")
     }
 }
 
@@ -165,11 +185,33 @@ func (m *MemSpace) getPhysicalAddress(virtAddr uintptr) (uintptr, bool) {
     pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
     pageIndex := pageAddr >> 12 & ((1 << 10) - 1)
     e := pta[pageIndex]
-    if e & PAGE_PRESENT == 0 {
+    if !e.isPresent() {
         return 0, false
     } else {
         return uintptr(e &^ (PAGE_SIZE -1)) | (virtAddr & (PAGE_SIZE -1)),true
     }
+}
+
+func (m *MemSpace) freeAllPages() {
+    for tableIdx,table := range m.PageDirectory {
+        if !table.isPresent() {
+            // Ignore kernel reserved mappings and tables that are not present
+            continue
+        }
+        pta := (*PageTable)(unsafe.Pointer(table &^ ((1 << 12) - 1)))
+        if tableIdx > (KERNEL_RESERVED >> 22) {
+            for i, entry := range pta {
+                virtAddr := uintptr((tableIdx << 22) + (i<<12))
+                if !entry.isPresent() || virtAddr <= KERNEL_RESERVED {
+                    continue
+                }
+                m.unMapPage(virtAddr)
+            }
+        }
+        table.unsetPresent()
+        freePage(uintptr(unsafe.Pointer(pta)))
+    }
+    freePage(uintptr(unsafe.Pointer(m.PageDirectory)))
 }
 
 func InitPaging() {
@@ -224,6 +266,7 @@ func InitPaging() {
         kernelMemSpace.tryMapPage(uintptr(i), uintptr(i), flag)
     }
     switchPageDir(kernelPageDirectory)
+    allocatedPages = 0
     SetInterruptHandler(0xE, pageFaultHandler, KCS_SELECTOR, PRIV_USER)
     enablePaging()
     //printPageTable((*PageTable)(unsafe.Pointer(kernelPageDirectory[0] &^ ((1 << 12) - 1))))

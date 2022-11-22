@@ -115,6 +115,8 @@ func (l *threadList) Enqueue(t *thread) {
 func (l *threadList) Dequeue(t *thread) {
     if t == l.thread && t.next == t {
         l.thread = nil
+    } else if t == l.thread {
+        l.thread = t.next
     }
     t.prev.next = t.next
     t.next.prev = t.prev
@@ -194,14 +196,60 @@ func ExitDomain(d *domain) {
     if allDomains.head == nil {
         currentDomain = nil
     }
-    // TODO: Do I have to test for the current Thread?
+
+    // clean up memory
+    scheduleStackArg(func(dom uintptr) {
+        doma := (*domain)(unsafe.Pointer(dom))
+        cleanUpDomain(doma)
+    }, (uintptr)(unsafe.Pointer(d)))
+}
+
+// Execute on scheduleStack
+func cleanUpDomain(d *domain) {
+    // Clean up threads
+    for cur := d.runningThreads.thread; d.runningThreads.thread != nil; cur = d.runningThreads.thread {
+        //kdebugln("Clean up thread ", cur.tid)
+        //kdebugln("t:", (uintptr)(unsafe.Pointer(cur)), " t.n:", (uintptr)(unsafe.Pointer(cur.next)), " t.p:", (uintptr)(unsafe.Pointer(cur.prev)))
+        d.runningThreads.Dequeue(cur)
+        cleanUpThread(cur)
+    }
+    for cur := d.blockedThreads.thread; d.blockedThreads.thread != nil; cur = d.blockedThreads.thread {
+        cleanUpThread(cur)
+        d.blockedThreads.Dequeue(cur)
+    }
+    // Clean allocated memory
+    d.MemorySpace.freeAllPages()
+
+    // Clean up kernel resources
+    kdebugln("Allocated pages ", allocatedPages)
+    Schedule()
+    freePage((uintptr)(unsafe.Pointer(d)))
+}
+
+// Execute on scheduleStack
+func cleanUpThread(t *thread) {
+    // TODO; Adjust when thread control block is no longer a single page
+    threadPtr := (uintptr)(unsafe.Pointer(t))
+    threadDomain := t.domain
+    threadDomain.MemorySpace.unMapPage(t.kernelStack.lo)
+    threadDomain.MemorySpace.unMapPage(threadPtr)
+    if currentThread == t {
+        currentThread = nil
+    }
 }
 
 func ExitThread(t *thread) {
-    t.domain.RemoveThread(t)
-    if t.domain.numThreads <= 0 {
-        ExitDomain(t.domain)
+    if t.domain.numThreads <= 1 {
+        // we're last thread
+        ExitDomain(t.domain) // does not return
     }
+    t.domain.RemoveThread(t)
+    kdebugln("Removing thread ", t.tid, " from domain ", t.domain.pid)
+    scheduleStackArg(func(threadPtr uintptr){
+        thread := (*thread)(unsafe.Pointer(threadPtr))
+        cleanUpThread(thread)
+        Schedule()
+    }, (uintptr)(unsafe.Pointer(t)))
 }
 
 func BlockThread(t *thread) {
@@ -280,18 +328,20 @@ func Schedule() {
 
 func switchToThread(t *thread) {
     // Save state of current thread
-    addr := uintptr(unsafe.Pointer(&(currentThread.fpState)))
-    offset := 16 - (addr % 16)
-    currentThread.fpOffset = offset
+    if currentThread != nil {
+        addr := uintptr(unsafe.Pointer(&(currentThread.fpState)))
+        offset := 16 - (addr % 16)
+        currentThread.fpOffset = offset
 
-    backupFpRegs(addr + offset)
+        backupFpRegs(addr + offset)
+    }
 
     // Load next thread
-
+    //kdebugln("Switching to domain pid", currentDomain.pid, " and thread ", t.tid)
     currentThread = t
 
-    addr = uintptr(unsafe.Pointer(&(currentThread.fpState)))
-    offset = currentThread.fpOffset
+    addr := uintptr(unsafe.Pointer(&(currentThread.fpState)))
+    offset := currentThread.fpOffset
     if offset != 0xffffffff {
         if (addr + offset) % 16 != 0 {
             text_mode_print_hex32(uint32(addr))

@@ -22,12 +22,19 @@ TEXT doubleStackReturnWrapper(SB),NOSPLIT,$0
     MOVL (thread_kernelStack+stack_hi)(BX), SP
     CALL ·doubleStackReturn(SB)
     HLT
- 
+
+TEXT ·scheduleStackArg(SB),NOSPLIT,$0-8
+    MOVL fn+0(FP), DI
+    MOVL arg+4(FP), SI
+    JMP doScheduleStack(SB)
 
 TEXT ·scheduleStack(SB),NOSPLIT,$0-4
     MOVL fn+0(FP), DI
+    MOVL $0, SI
+    JMP doScheduleStack(SB)
 
-    // Test if invokation is already in schedule stack
+TEXT doScheduleStack(SB),NOSPLIT,$0
+    // Test if invocation is already in schedule stack
     MOVL $·scheduleThread(SB), AX
     MOVL (thread_kernelStack+stack_lo)(AX), BX
     CMPL SP, BX
@@ -37,13 +44,13 @@ TEXT ·scheduleStack(SB),NOSPLIT,$0-4
     JL already_in_schedule_stack
 
 normal:
-
     MOVL main·currentThread(SB), AX
 
     MOVL SP, (thread_kernelInfo+InterruptInfo_ESP)(AX)
     MOVL $scheduleStackReturn(SB), (thread_kernelInfo+InterruptInfo_EIP)(AX)
 
     MOVL BX, SP
+    PUSHL SI
 
     MOVL DI, DX
     MOVL 0(DI), DI

@@ -8,11 +8,11 @@ import (
 )
 
 var progs = [...]string {
-    "/usr/hellogo",
+    "/usr/bomb",
 }
 
-var domains [len(progs)]domain
-var threads [len(progs)]thread
+var domains [len(progs)]*domain
+var threads [len(progs)]*thread
 
 func main()
 
@@ -62,15 +62,20 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 
     var err int
     for i :=0; i < len(progs); i++ {
-        err = StartProgram(progs[i], &domains[i], &threads[i])
+        newDomainMem := allocPage()
+        Memclr(newDomainMem, PAGE_SIZE)
+        newDomain := (* domain)(unsafe.Pointer(newDomainMem))
+        newThreadMem := allocPage()
+        Memclr(newThreadMem, PAGE_SIZE)
+        newThread := (* thread)(unsafe.Pointer(newThreadMem))
+        err = StartProgram(progs[i], newDomain, newThread)
         if err != 0 {
             kernelPanic("Could not start program")
         }
+        newDomain.MemorySpace.mapPage(newThreadMem, newThreadMem, PAGE_RW | PAGE_PERM_KERNEL)
+        AddDomain(newDomain)
     }
 
-    for i := range domains {
-        AddDomain(&domains[i])
-    }
     kprintln("domain size: ", uint(unsafe.Sizeof(domains[0])),
                 " thread_size: ", uint(unsafe.Sizeof(threads[0])),
                 " total: ", uint(unsafe.Sizeof(domains[0]) + unsafe.Sizeof(threads[0])))
@@ -106,7 +111,7 @@ func printFuncName(pc uintptr) {
 
 func panicHelper(thread *thread){
     kprintln("Domain ID: ", thread.domain.pid, ", Thread ID: ", thread.tid)
-    if kernelInterrupt {
+    if thread.isKernelInterrupt {
         kprint("In kernel function: ")
         printFuncName(thread.kernelInfo.EIP)
     } else {

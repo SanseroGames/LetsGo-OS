@@ -6,7 +6,7 @@ import (
     "syscall"
 )
 
-const PRINT_SYSCALL = true
+const PRINT_SYSCALL = false
 
 type ioVec struct {
     iovBase uintptr    /* Starting address */

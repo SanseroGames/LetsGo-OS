@@ -58,7 +58,6 @@ var (
     handlers [256]InterruptHandler
     PerformSchedule = false
     oldThread *thread
-    kernelInterrupt = false
 )
 
 func interrupt_debug(args ...interface{}) {
@@ -79,7 +78,11 @@ func getIDT() *IdtDescriptor
 func EnableInterrupts()
 func DisableInterrupts()
 
-func scheduleStack(fn func(), noBackup bool)
+func scheduleStack(fn func())
+
+// Pass an argument to function on schedule stack. If more complex strucutres need to be passed, pass pointer and cast it accordingly
+func scheduleStackArg(fn func(arg uintptr), arg uintptr)
+
 
 //go:nosplit
 func scheduleStackFail(caller uintptr){
@@ -172,7 +175,7 @@ func do_isr(regs RegisterState, info InterruptInfo){
             interrupt_debug("Scheduling on user kernel thread")
             scheduleStack(func(){
                 Schedule()
-            }, currentThread.isKernelInterrupt)
+            })
             interrupt_debug("Performed schedule")
         }
         PerformSchedule = false
