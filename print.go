@@ -1,15 +1,15 @@
 package main
 
 import (
-    "unsafe"
-    "io"
-    "reflect"
+	"io"
+	"reflect"
+	"unsafe"
 )
 
 var (
-    defaultLogWriter io.Writer = &serialDevice
-    defaultScreenWriter io.Writer = text_mode_writer{}
-    defaultErrorWriter io.Writer = text_mode_error_writer{}
+	defaultLogWriter    io.Writer = &serialDevice
+	defaultScreenWriter io.Writer = text_mode_writer{}
+	defaultErrorWriter  io.Writer = text_mode_error_writer{}
 )
 
 // Copied and adapted code from go runtime
@@ -98,7 +98,7 @@ func printfloat(w io.Writer, v float64) {
 	buf[n+4] = byte(e/100) + '0'
 	buf[n+5] = byte(e/10)%10 + '0'
 	buf[n+6] = byte(e%10) + '0'
-    writeWrapper(w, buf[:])
+	writeWrapper(w, buf[:])
 }
 
 func printcomplex(w io.Writer, c complex128) {
@@ -115,7 +115,7 @@ func printuint(w io.Writer, v uint64) {
 		}
 		v /= 10
 	}
-    writeWrapper(w, buf[i:])
+	writeWrapper(w, buf[i:])
 }
 
 func printint(w io.Writer, v int64) {
@@ -143,18 +143,19 @@ func printhex(w io.Writer, v uint64) {
 	buf[i] = 'x'
 	i--
 	buf[i] = '0'
-    writeWrapper(w, buf[i:])
+	writeWrapper(w, buf[i:])
 }
 
 func printpointer(w io.Writer, p unsafe.Pointer) {
 	printhex(w, uint64(uintptr(p)))
 }
-func printuintptr(w io.Writer,p uintptr) {
+func printuintptr(w io.Writer, p uintptr) {
 	printhex(w, uint64(p))
 }
 
 func printstring(w io.Writer, s string) {
-    writeWrapper(w, bytes(s))}
+	writeWrapper(w, bytes(s))
+}
 
 //func printslice(s []byte) {
 //	sp := (*slice)(unsafe.Pointer(&s))
@@ -162,76 +163,76 @@ func printstring(w io.Writer, s string) {
 //	printpointer(sp.array)
 //}
 
-func kFprint(w io.Writer, args ...interface{}){
-    for _, v := range args {
-        switch t := v.(type) {
-        case bool:
-            printbool(w, t)
-        case string:
-            printstring(w, t)
-        case uintptr:
-            printuintptr(w, t)
-        case unsafe.Pointer:
-            printpointer(w, t)
-        case byte:
-            printuint(w, uint64(t))
-        case uint:
-            printuint(w, uint64(t))
-        case uint32:
-            printuint(w, uint64(t))
-        case uint64:
-            printuint(w, uint64(t))
-        case int:
-            printint(w, int64(t))
-        case int32:
-            printint(w, int64(t))
-        case int64:
-            printint(w, t)
-        case float64:
-            printfloat(w, t)
-        case complex128:
-            printcomplex(w, t)
-        default:
-            // TODO: Maybe print type if that is possible without memory allocation?
-            printstring(defaultErrorWriter, "<Unknown Type>")
-        }
-    }
+func kFprint(w io.Writer, args ...interface{}) {
+	for _, v := range args {
+		switch t := v.(type) {
+		case bool:
+			printbool(w, t)
+		case string:
+			printstring(w, t)
+		case uintptr:
+			printuintptr(w, t)
+		case unsafe.Pointer:
+			printpointer(w, t)
+		case byte:
+			printuint(w, uint64(t))
+		case uint:
+			printuint(w, uint64(t))
+		case uint32:
+			printuint(w, uint64(t))
+		case uint64:
+			printuint(w, uint64(t))
+		case int:
+			printint(w, int64(t))
+		case int32:
+			printint(w, int64(t))
+		case int64:
+			printint(w, t)
+		case float64:
+			printfloat(w, t)
+		case complex128:
+			printcomplex(w, t)
+		default:
+			// TODO: Maybe print type if that is possible without memory allocation?
+			printstring(defaultErrorWriter, "<Unknown Type>")
+		}
+	}
 }
 
 func kprint(args ...interface{}) {
-    kFprint(defaultScreenWriter, args...)
-    kFprint(defaultLogWriter, args...)
+	kFprint(defaultScreenWriter, args...)
+	kFprint(defaultLogWriter, args...)
 }
 
 func kprintln(args ...interface{}) {
-    kprint(args...)
-    kprint("\n")
+	kprint(args...)
+	kprint("\n")
 }
 
 func kerror(args ...interface{}) {
-    kFprint(defaultErrorWriter, args...)
-    kFprint(defaultLogWriter, args...)
+	kFprint(defaultErrorWriter, args...)
+	kFprint(defaultLogWriter, args...)
 }
 
-func kerrorln(args ...interface{}){
-    kerror(args...)
-    kerror("\n")
+func kerrorln(args ...interface{}) {
+	kerror(args...)
+	kerror("\n")
 }
 
 func kdebug(args ...interface{}) {
-    kFprint(defaultLogWriter, args...)
+	kFprint(defaultLogWriter, args...)
 }
 
 func kdebugln(args ...interface{}) {
-    kdebug(args...)
-    kdebug("\n")
+	kdebug(args...)
+	kdebug("\n")
 }
 
 func writeWrapper(w io.Writer, p []byte) {
-    if w == nil {
-        w = defaultScreenWriter
-    }
-    w.Write(*(*[]byte)(noEscape(unsafe.Pointer(&p))))
+	if w == nil {
+		w = defaultScreenWriter
+	}
+	w.Write(*(*[]byte)(noEscape(unsafe.Pointer(&p))))
 }
 
 func bytes(s string) []byte {
@@ -239,7 +240,7 @@ func bytes(s string) []byte {
 	return *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
 		Data: stringHeader.Data,
 		Len:  stringHeader.Len,
-        Cap:  stringHeader.Len,
+		Cap:  stringHeader.Len,
 	}))
 }
 

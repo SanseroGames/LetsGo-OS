@@ -97,15 +97,14 @@ $(iso_target): $(kernel_target) usr
 	@cp $(kernel_target) $(BUILD_DIR)/isofiles/boot/kernel.bin
 
 	@cp $(wildcard $(USR_BUILD_DIR)/*) $(BUILD_DIR)/isofiles/usr/
-	@a="$$(./dup.sh $(patsubst $(USR_BUILD_DIR)/%,/usr/%, $(wildcard $(USR_BUILD_DIR)/*)))"; sed -e "s#{MODULES}#$$a#g" arch/x86/script/grub.cfg.tpl | tr '@' '\n' > arch/x86/script/grub.cfg
-	@cp arch/$(ARCH)/script/grub.cfg $(BUILD_DIR)/isofiles/boot/grub
+	@a="$$(./dup.sh $(patsubst $(USR_BUILD_DIR)/%,/usr/%, $(wildcard $(USR_BUILD_DIR)/*)))"; sed -e "s#{MODULES}#$$a#g" arch/x86/script/grub.cfg.tpl | tr '@' '\n' > $(BUILD_DIR)/isofiles/boot/grub/grub.cfg
 
 	@grub-mkrescue -o $(iso_target) $(BUILD_DIR)/isofiles 2>&1 | sed -e "s/^/  | /g" || exit 1
 	@rm -r $(BUILD_DIR)/isofiles
 
 run: iso
 	qemu-system-i386 -d cpu_reset -no-reboot -cdrom $(iso_target) \
-		-hda $(disk_image) -boot order=dc
+		-hda $(disk_image) -boot order=dc -serial stdio
 
 run-interrupt: iso
 	qemu-system-i386 -d int,cpu_reset -no-reboot -cdrom $(iso_target) \

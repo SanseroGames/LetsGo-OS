@@ -55,8 +55,8 @@ func InitMultiboot(info *MultibootInfo) {
     multibootInfo = info
 
     mbI := *(*[]uint32)(unsafe.Pointer(&reflect.SliceHeader{
-        Len:  int((*info).total_size),
-	    Cap:  int((*info).total_size),
+        Len:  int(info.total_size),
+	    Cap:  int(info.total_size),
 	    Data: uintptr(unsafe.Pointer(info))+8,
     }))
 
