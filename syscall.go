@@ -214,7 +214,7 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_POLL, "poll syscall", okHandler)
 	RegisterSyscall(syscall.SYS_CLONE, "clone syscall", linuxCloneSyscall)
 	RegisterSyscall(syscall.SYS_FUTEX, "futex syscall", linuxFutexSyscall)
-	RegisterSyscall(syscall.SYS_SCHED_YIELD, "sched yield syscall", okHandler)
+	RegisterSyscall(syscall.SYS_SCHED_YIELD, "sched yield syscall", linuxSchedYieldSyscall)
 	RegisterSyscall(syscall.SYS_GETEUID32, "get euid syscall", okHandler)
 	RegisterSyscall(syscall.SYS_GETUID32, "get uid syscall", okHandler)
 	RegisterSyscall(syscall.SYS_GETEGID32, "get egid syscall", okHandler)
@@ -660,7 +660,7 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	text := args.arg2
 	length := args.arg3
 	if PRINT_SYSCALL {
-		kdebugln("FD: ", fd)
+		kdebugln("FD: ", fd, " text: ", uintptr(text), " length: ", length)
 	}
 	if fd < 1 || fd > 2 {
 		return 0, syscall.EBADF
@@ -798,6 +798,11 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		kerrorln("Unsupported futex op", futex_op)
 		return 0, syscall.ENOSYS
 	}
+}
+
+func linuxSchedYieldSyscall(rgs syscallArgs) (uint32, syscall.Errno) {
+	Block()
+	return 0, ESUCCESS
 }
 
 func unsupportedSyscall() {
