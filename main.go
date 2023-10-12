@@ -8,7 +8,7 @@ import (
 )
 
 var progs = [...]string{
-	"/usr/cread",
+	"/usr/hacker",
 }
 
 var domains [len(progs)]*domain

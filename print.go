@@ -246,6 +246,7 @@ func bytes(s string) []byte {
 
 // noEscape hides a pointer from escape analysis. This function is copied over
 // from runtime/stubs.go
+//
 //go:nosplit
 func noEscape(p unsafe.Pointer) unsafe.Pointer {
 	x := uintptr(p)

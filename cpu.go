@@ -7,4 +7,3 @@ func Outb(port uint16, value uint8)
 func Outw(port uint16, value uint16)
 
 func Hlt()
-
