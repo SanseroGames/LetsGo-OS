@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"unsafe"
 )
 
@@ -37,11 +36,7 @@ var (
 var fb []uint16
 
 func text_mode_init() {
-	fb = *(*[]uint16)(unsafe.Pointer(&reflect.SliceHeader{
-		Len:  fbWidth * fbHeight,
-		Cap:  fbWidth * fbHeight,
-		Data: fbPhysAddr,
-	}))
+	fb = unsafe.Slice((*uint16)(unsafe.Pointer(fbPhysAddr)), fbWidth*fbHeight)
 	//text_mode_enable_cursor()
 	//text_mode_update_cursor(0,0)
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"debug/elf"
-	"reflect"
 	"unsafe"
 )
 
@@ -128,11 +127,7 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 	if moduleLen < 4 {
 		return nil, 0, 0
 	}
-	elfData := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-		Len:  moduleLen,
-		Cap:  moduleLen,
-		Data: uintptr(module.Start),
-	}))
+	elfData := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(module.Start))), moduleLen)
 
 	// Test if really elf file
 	if elfData[0] != 0x7f || elfData[1] != 'E' || elfData[2] != 'L' || elfData[3] != 'F' {
@@ -140,18 +135,9 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 		return nil, 0, 0
 	}
 
-	//elfTarget := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-	//    Len:  moduleLen,
-	//    Cap:  moduleLen,
-	//    Data: baseAddr,
-	//}))
 	elfHeader := (*elf.Header32)(unsafe.Pointer(uintptr(module.Start)))
 
-	progHeaders := *(*[]elf.Prog32)(unsafe.Pointer(&reflect.SliceHeader{
-		Len:  int(elfHeader.Phnum),
-		Cap:  int(elfHeader.Phnum),
-		Data: uintptr(module.Start + elfHeader.Phoff),
-	}))
+	progHeaders := unsafe.Slice((*elf.Prog32)(unsafe.Add(unsafe.Pointer(uintptr(module.Start)), elfHeader.Phoff)), elfHeader.Phnum)
 
 	baseAddr := uintptr(0xffffffff)
 	topAddr := uint32(0)
@@ -161,21 +147,15 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 				baseAddr = uintptr(n.Vaddr)
 			}
 			localTop := uint32(0)
-			contents := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-				Len:  int(n.Filesz),
-				Cap:  int(n.Filesz),
-				Data: uintptr(module.Start + n.Off),
-			}))
+			contents := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(uintptr(module.Start)), n.Off)), n.Filesz)
+
 			offset := n.Vaddr & (PAGE_SIZE - 1)
 			start := uint32(0)
 			if offset != 0 {
 				p := allocPage()
 				Memclr(p, PAGE_SIZE)
-				target := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-					Len:  PAGE_SIZE,
-					Cap:  PAGE_SIZE,
-					Data: p,
-				}))
+				target := unsafe.Slice((*byte)(unsafe.Pointer(p)), PAGE_SIZE)
+
 				end := int(PAGE_SIZE - offset)
 				if end > len(contents) {
 					end = len(contents)
@@ -188,11 +168,8 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 			for i := start; i < n.Filesz; i += PAGE_SIZE {
 				p := allocPage()
 				Memclr(p, PAGE_SIZE)
-				target := *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-					Len:  PAGE_SIZE,
-					Cap:  PAGE_SIZE,
-					Data: p,
-				}))
+				target := unsafe.Slice((*byte)(unsafe.Pointer(p)), PAGE_SIZE)
+
 				end := int(i + PAGE_SIZE)
 				if end > len(contents) {
 					end = len(contents)
@@ -201,29 +178,15 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 				// Currently don't care about write protecton of code
 				space.mapPage(p, uintptr(n.Vaddr+i), PAGE_RW|PAGE_PERM_USER)
 				localTop = n.Vaddr + i + PAGE_SIZE
-				//delay(1000)
 			}
 			if n.Filesz < n.Memsz {
 				for i := localTop; i < n.Vaddr+n.Memsz; i += PAGE_SIZE {
 					p := allocPage()
 					Memclr(p, PAGE_SIZE)
-					//text_mode_print_hex32(i)
 					space.mapPage(p, uintptr(i), PAGE_RW|PAGE_PERM_USER)
 					localTop = i + PAGE_SIZE
 				}
 			}
-			//text_mode_print_hex32(n.Vaddr)
-			//text_mode_print(" ")
-			//text_mode_print_hex32(n.Memsz)
-			//text_mode_print(" ")
-			//text_mode_print_hex32(module.Start + n.Off)
-			//text_mode_print(" ")
-			//text_mode_print_hex32(n.Filesz)
-			//text_mode_print(" ")
-			//text_mode_print_hex32(n.Type)
-			//text_mode_print(" ")
-			//text_mode_print_hex32(offset)
-			//text_mode_println("")
 			if localTop > topAddr {
 				topAddr = localTop
 			}

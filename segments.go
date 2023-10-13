@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"unsafe"
 )
 
@@ -137,11 +136,7 @@ func InitSegments() {
 	oldGdtAddr := uintptr(uint32(gdtDescriptor.GdtAddressLow) |
 		uint32(gdtDescriptor.GdtAddressHigh)<<16)
 	oldGdtLen := int(uintptr(gdtDescriptor.GdtSize+1) / unsafe.Sizeof(gdtEntry))
-	oldGdt := *(*[]GdtEntry)(unsafe.Pointer(&reflect.SliceHeader{
-		Len:  oldGdtLen,
-		Cap:  oldGdtLen,
-		Data: oldGdtAddr,
-	}))
+	oldGdt := unsafe.Slice((*GdtEntry)(unsafe.Pointer(oldGdtAddr)), oldGdtLen)
 	copy(gdtTable[:], oldGdt)
 	gdtAddr := uintptr(unsafe.Pointer(&gdtTable))
 	gdtDescriptor.GdtAddressLow = uint16(gdtAddr)

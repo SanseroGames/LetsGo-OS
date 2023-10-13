@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"unsafe"
 )
 
@@ -54,11 +53,7 @@ type MemoryMap struct {
 func InitMultiboot(info *MultibootInfo) {
 	multibootInfo = info
 
-	mbI := *(*[]uint32)(unsafe.Pointer(&reflect.SliceHeader{
-		Len:  int(info.total_size),
-		Cap:  int(info.total_size),
-		Data: uintptr(unsafe.Pointer(info)) + 8,
-	}))
+	mbI := unsafe.Slice((*uint32)(unsafe.Add(unsafe.Pointer(info), 8)), info.total_size)
 
 	foundModules := 0
 	for i := uint32(0); i < (*info).total_size; {
@@ -68,20 +63,14 @@ func InitMultiboot(info *MultibootInfo) {
 		if mbI[i] == 3 && foundModules < len(loadedModules) {
 			loadedModules[foundModules].Start = mbI[i+2]
 			loadedModules[foundModules].End = mbI[i+3]
-			hdr := (*reflect.StringHeader)(unsafe.Pointer(&loadedModules[foundModules].Cmdline))
-			hdr.Data = uintptr(unsafe.Pointer(info)) + 8 + uintptr(i)*4 + 16
-			hdr.Len = int(mbI[i+1]-16) - 1 //Possible underflow
+			loadedModules[foundModules].Cmdline = unsafe.String((*byte)(unsafe.Add(unsafe.Pointer(info), 8+i*4+16)), mbI[i+1]-16-1) //Possible underflow
 			foundModules++
 		}
 		if mbI[i] == 6 {
 			size := mbI[i+1]
 			esize := mbI[i+2]
 			nrentries := (size - 16) / esize
-			maps := *(*[]MemoryMap)(unsafe.Pointer(&reflect.SliceHeader{
-				Len:  int(nrentries),
-				Cap:  int(nrentries),
-				Data: uintptr(unsafe.Pointer(info)) + 8 + uintptr(i)*4 + 16,
-			}))
+			maps := unsafe.Slice((*MemoryMap)(unsafe.Add(unsafe.Pointer(info), 8+i*4+16)), nrentries)
 			copy(memoryMaps[:], maps)
 		}
 		oldi := i

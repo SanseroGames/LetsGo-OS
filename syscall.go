@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"syscall"
 	"unsafe"
 )
@@ -671,22 +670,18 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		kerrorln("Could not look up string addr")
 		return 0, syscall.EFAULT
 	}
-	iovecs := *(*[]ioVec)(unsafe.Pointer(&reflect.SliceHeader{
-		Len:  int(count),
-		Cap:  int(count),
-		Data: addr,
-	}))
+	iovecs := unsafe.Slice((*ioVec)(unsafe.Pointer(addr)), count)
 	printed := 0
 	for _, n := range iovecs {
 		addr, ok = currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(n.iovBase))
-		var s string
-		hdr := (*reflect.StringHeader)(unsafe.Pointer(&s)) // case 1
-		hdr.Data = uintptr(unsafe.Pointer(uintptr(addr)))  // case 6 (this case)
-		hdr.Len = int(n.iovLen)
+		if !ok {
+			return 0, syscall.EFAULT
+		}
+		s := unsafe.String((*byte)(unsafe.Pointer(uintptr(addr))), n.iovLen)
 		if fd == 2 {
-			text_mode_print_error(s)
+			kerror(s)
 		} else {
-			text_mode_print(s)
+			kprint(s)
 		}
 		printed += len(s)
 	}
@@ -709,17 +704,7 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		text_mode_print_errorln("Could not look up string addr")
 		return 0, syscall.EFAULT
 	}
-	var s string
-	hdr := (*reflect.StringHeader)(unsafe.Pointer(&s)) // case 1
-	hdr.Data = uintptr(unsafe.Pointer(uintptr(addr)))  // case 6 (this case)
-	hdr.Len = int(length)
-	// Test if it is a go panic and print infos to debug:
-
-	//prevent stack trace
-	//if stop > 10 {
-	//    return uint32(len(s))
-	//}
-	//stop++
+	s := unsafe.String((*byte)(unsafe.Pointer(uintptr(addr))), length)
 
 	if fd == 2 {
 		kerror(s)
