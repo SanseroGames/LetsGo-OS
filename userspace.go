@@ -127,7 +127,9 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
 	Memclr(newThreadAddr, int(unsafe.Sizeof(outThread)))
 	outThread.fpOffset = 0xffffffff
 	kernelStack := allocPage()
-	kdebugln("thread stack ", kernelStack)
+	if ENABLE_DEBUG {
+		kdebugln("thread stack ", kernelStack)
+	}
 
 	Memclr(kernelStack, PAGE_SIZE)
 	outThread.kernelStack.lo = kernelStack

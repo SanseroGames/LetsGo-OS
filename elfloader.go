@@ -120,8 +120,7 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 	}
 
 	if module.Cmdline != multibootModule {
-		text_mode_print_error("[ELF] Unknown module: ")
-		text_mode_print_errorln(multibootModule)
+		kerrorln("[ELF] Unknown module: ", multibootModule, " ", module.Cmdline)
 		return nil, 0, 0
 	}
 	moduleLen := int(module.End - module.Start)
@@ -137,9 +136,7 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 
 	// Test if really elf file
 	if elfData[0] != 0x7f || elfData[1] != 'E' || elfData[2] != 'L' || elfData[3] != 'F' {
-		text_mode_print_error("[ELF] '")
-		text_mode_print_error(multibootModule)
-		text_mode_print_errorln("' is not a ELF file")
+		kerrorln("[ELF] '", multibootModule, "' is not a ELF file")
 		return nil, 0, 0
 	}
 

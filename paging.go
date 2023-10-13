@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	PAGE_DEBUG = true
+	PAGE_DEBUG = false
 
 	// Reserve memory below 50 MB for kernel image
 	KERNEL_START      = 1 << 20
@@ -20,6 +20,13 @@ const (
 	PAGE_PERM_KERNEL   = 0 << 2
 	PAGE_WRITETHROUGH  = 1 << 3
 	PAGE_DISABLE_CACHE = 1 << 4
+
+	PAGE_FAULT_PRESENT           = 1 << 0
+	PAGE_FAULT_WRITE             = 1 << 1
+	PAGE_FAULT_USER              = 1 << 2
+	PAGE_FAULT_INSTRUCTION_FETCH = 1 << 4
+
+	MAX_ALLOC_VIRT_ADDR = 0xf0000000
 )
 
 var (
@@ -63,8 +70,13 @@ func getCurrentPageDir() *PageTable
 func getPageFaultAddr() uint32
 
 func pageFaultHandler() {
+	code := currentThread.info.ExceptionCode
 	kerrorln("\nPage Fault! Disabling Interrupt and halting!")
-	kprintln("Exception code: ", uintptr(currentThread.info.ExceptionCode))
+	kprintln("Exception code: ", uintptr(code))
+	kprintln("Present: ", (code&PAGE_FAULT_PRESENT)>>(PAGE_FAULT_PRESENT>>1),
+		" Write: ", (code&PAGE_FAULT_WRITE)>>(PAGE_FAULT_WRITE>>1),
+		" user: ", (code&PAGE_FAULT_USER)>>(PAGE_FAULT_USER>>1),
+		" instructino: ", (code&PAGE_FAULT_INSTRUCTION_FETCH)>>(PAGE_FAULT_INSTRUCTION_FETCH>>1))
 	causingAddr := getPageFaultAddr()
 	kprint("Causing Address: ", uintptr(causingAddr))
 	f := findfuncTest(uintptr(causingAddr))
@@ -155,7 +167,7 @@ func (m *MemSpace) tryMapPage(page uintptr, virtAddr uintptr, flags uint8) bool 
 	}
 	e = pageTableEntry(page | uintptr(flags) | PAGE_PRESENT)
 	pta[pageIndex] = e
-	if virtAddr >= m.VmTop && virtAddr < 0x80000000 {
+	if virtAddr >= m.VmTop && virtAddr < 0x8000000 {
 		m.VmTop = virtAddr + PAGE_SIZE
 	}
 	return true
@@ -167,13 +179,15 @@ func (m *MemSpace) mapPage(page uintptr, virtAddr uintptr, flags uint8) {
 	}
 	if !m.tryMapPage(page, virtAddr, flags) {
 		kerrorln("Page already present")
-		kprintln(uint32(page), " -> ", uint32(virtAddr))
+		kprintln(page, " -> ", virtAddr)
 		kernelPanic("Tried to remap a page")
 	}
 }
 
 func (m *MemSpace) unMapPage(virtAddr uintptr) {
-	//kdebugln("[PAGE] Unmapping page ", virtAddr)
+	if PAGE_DEBUG {
+		kdebugln("[PAGE] Unmapping page ", virtAddr)
+	}
 	pt := m.getPageTable(virtAddr)
 	pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
 	pageIndex := virtAddr >> 12 & ((1 << 10) - 1)
@@ -189,6 +203,54 @@ func (m *MemSpace) unMapPage(virtAddr uintptr) {
 	}
 }
 
+func (m *MemSpace) getPageTableEntry(virtAddr uintptr) pageTableEntry {
+	pageAddr := virtAddr &^ (PAGE_SIZE - 1)
+	pt := m.getPageTable(pageAddr)
+	pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
+	pageIndex := pageAddr >> 12 & ((1 << 10) - 1)
+	return pta[pageIndex]
+}
+
+func (m *MemSpace) findSpaceFor(startAddr uintptr, length uintptr) uintptr {
+	if PAGE_DEBUG {
+		kdebugln("[PAGE] Find space for ", startAddr, " with size ", length)
+	}
+	for startAddr < MAX_ALLOC_VIRT_ADDR {
+		// TODO: Check if page table is not allocated and count it as free instead of getting table entry and causing the table to be allocated
+		for ; m.getPageTableEntry(startAddr).isPresent() && startAddr < MAX_ALLOC_VIRT_ADDR; startAddr += PAGE_SIZE {
+		}
+		endAddr := startAddr + length
+		if PAGE_DEBUG {
+			kdebugln("[PAGE][FIND] Trying ", startAddr, " with endaddr ", endAddr)
+		}
+		if endAddr > MAX_ALLOC_VIRT_ADDR {
+			break
+		}
+		isRangeFree := true
+		for i := startAddr; i < endAddr && isRangeFree; i += PAGE_SIZE {
+			entry := m.getPageTableEntry(i)
+			isRangeFree = isRangeFree && !entry.isPresent()
+			if !isRangeFree {
+				startAddr = i
+			}
+		}
+		if isRangeFree {
+			if PAGE_DEBUG {
+				kdebugln("[PAGE][FIND] Found ", startAddr)
+			}
+			return startAddr
+		} else {
+			if PAGE_DEBUG {
+				kdebugln("[PAGE][FIND] position did not work")
+			}
+		}
+	}
+	if PAGE_DEBUG {
+		kdebugln("[PAGE][FIND] Did not find suitable location ", startAddr)
+	}
+	return 0
+}
+
 func (m *MemSpace) getPhysicalAddress(virtAddr uintptr) (uintptr, bool) {
 	pageAddr := virtAddr &^ (PAGE_SIZE - 1)
 	pt := m.getPageTable(pageAddr)
@@ -199,7 +261,7 @@ func (m *MemSpace) getPhysicalAddress(virtAddr uintptr) (uintptr, bool) {
 		return 0, false
 	} else {
 		if PAGE_DEBUG {
-			kdebugln("[PAGING] Translated address: ", virtAddr, "->", uintptr(e&^(PAGE_SIZE-1)))
+			// kdebugln("[PAGING] Translated address: ", virtAddr, "->", uintptr(e&^(PAGE_SIZE-1)))
 		}
 		return uintptr(e&^(PAGE_SIZE-1)) | (virtAddr & (PAGE_SIZE - 1)), true
 	}

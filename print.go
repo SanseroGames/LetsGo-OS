@@ -2,7 +2,6 @@ package main
 
 import (
 	"io"
-	"reflect"
 	"unsafe"
 )
 
@@ -236,12 +235,8 @@ func writeWrapper(w io.Writer, p []byte) {
 }
 
 func bytes(s string) []byte {
-	stringHeader := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	return *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: stringHeader.Data,
-		Len:  stringHeader.Len,
-		Cap:  stringHeader.Len,
-	}))
+	stringData := unsafe.StringData(s)
+	return unsafe.Slice(stringData, len(s))
 }
 
 // noEscape hides a pointer from escape analysis. This function is copied over

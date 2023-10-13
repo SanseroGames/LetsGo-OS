@@ -3,12 +3,19 @@ package main
 import (
 	"io"
 	"path"
-	"reflect"
 	"unsafe"
 )
 
 var progs = [...]string{
-	"/usr/hacker",
+	// "/usr/cread",
+	// "/usr/helloc",
+	// "/usr/hellocxx",
+	"/usr/hellogo",
+	// "/usr/hellorust",
+	// "/usr/readtest",
+	// "/usr/rustread",
+	// "/usr/shell",
+	// "/usr/statx",
 }
 
 var domains [len(progs)]*domain
@@ -16,7 +23,7 @@ var threads [len(progs)]*thread
 
 func main()
 
-const ENABLE_DEBUG = true
+const ENABLE_DEBUG = false
 
 //go:linkname kmain main.main
 func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
@@ -229,9 +236,5 @@ func cstring(ptr uintptr) string {
 	for p := ptr; *(*byte)(unsafe.Pointer(p)) != 0; p++ {
 		n++
 	}
-	var s string
-	hdr := (*reflect.StringHeader)(unsafe.Pointer(&s)) // case 1
-	hdr.Data = uintptr(unsafe.Pointer(ptr))            // case 6 (this case)
-	hdr.Len = int(n)
-	return s
+	return unsafe.String((*byte)(unsafe.Pointer(ptr)), n)
 }

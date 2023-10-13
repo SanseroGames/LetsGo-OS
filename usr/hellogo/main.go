@@ -1,46 +1,38 @@
 package main
 
 import (
-    "fmt"
-    //"os/exec"
-    //"os"
-    "syscall"
+	"fmt"
+	"syscall"
+	//"os/exec"
+	//"os"
+	// "syscall"
 )
 
 func main() {
-    fmt.Println("Hello go world")
-    //cmd := exec.Command("/usr/helloc")
-    //cmd.Start()
-    //_, err := os.StartProcess("/usr/helloc", []string{}, &os.ProcAttr{
-	//	Dir:   "",
-	//	Files: []*os.File{},
-	//	Env:   []string{},
-	//	Sys:   nil,
-	//})
-    var err error
-    err = syscall.Exec("/usr/helloc", []string{}, []string{})
+	fmt.Println("Hello go world")
+	defer fmt.Println("Bye go world")
+	var err error
+	err = syscall.Exec("/usr/helloc", []string{}, []string{})
 	if err != nil {
-        fmt.Println(err)
+		fmt.Println(err)
 	}
-    err = syscall.Exec("/usr/hellocxx", []string{}, []string{})
+	err = syscall.Exec("/usr/hellocxx", []string{}, []string{})
 	if err != nil {
-        fmt.Println(err)
+		fmt.Println(err)
 	}
-    err = syscall.Exec("/usr/hellorust", []string{}, []string{})
+	err = syscall.Exec("/usr/hellorust", []string{}, []string{})
 	if err != nil {
-        fmt.Println(err)
+		fmt.Println(err)
 	}
-    err = syscall.Exec("/usr/statx", []string{}, []string{})
+	err = syscall.Exec("/usr/statx", []string{}, []string{})
 	if err != nil {
-        fmt.Println(err)
+		fmt.Println(err)
 	}
-    defer fmt.Println("I can use go features")
-    //go fmt.Println("1")
-    //go fmt.Println("2")
-    //go fmt.Println("3")
-    //go fmt.Println("4")
-    fmt.Println("Bye go world")
-    //test()
+	go fmt.Println("1")
+	go fmt.Println("2")
+	go fmt.Println("3")
+	go fmt.Println("4")
+	test()
 
 }
 

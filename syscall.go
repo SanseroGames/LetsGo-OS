@@ -144,6 +144,12 @@ const (
 	FUTEX_PRIVATE_FLAG = 128
 
 	ESUCCESS = syscall.Errno(0)
+
+	MMAP_PROT_READ  = 1
+	MMAP_PROT_WRITE = 2
+	MMAP_PROT_EXEC  = 4
+
+	MMAP_MAP_FIXED = 0x10
 )
 
 var (
@@ -240,6 +246,8 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_DUP3, "dup3 syscall", func(args syscallArgs) (uint32, syscall.Errno) { return 0, ESUCCESS })
 	RegisterSyscall(syscall.SYS_DUP2, "dup2 syscall", func(args syscallArgs) (uint32, syscall.Errno) { return 0, ESUCCESS })
 	RegisterSyscall(syscall.SYS_EXECVE, "execve syscall", linuxExecveSyscall)
+	RegisterSyscall(syscall.SYS_MADVISE, "madvise syscall", okHandler)
+	RegisterSyscall(syscall.SYS_PRLIMIT64, "prlimit64 syscall", okHandler)
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -286,7 +294,7 @@ func linuxSyscallHandler() {
 	}
 	handler := syscallList[handlerIdx-1]
 	if PRINT_SYSCALL {
-		kdebugln("pid: ",
+		kdebug("pid: ",
 			currentThread.domain.pid,
 			" tid: ",
 			currentThread.tid,
@@ -298,6 +306,19 @@ func linuxSyscallHandler() {
 			uintptr(syscallNr),
 			")",
 			")")
+		kdebugln(" |- arg1:",
+			uintptr(args.arg1),
+			", arg2:",
+			uintptr(args.arg2),
+			", arg3:",
+			uintptr(args.arg3),
+			", arg4:",
+			uintptr(args.arg4),
+			", arg5:",
+			uintptr(args.arg5),
+			", arg6:",
+			uintptr(args.arg6),
+		)
 	}
 	ret, err = handler.handler(args)
 	if PRINT_SYSCALL {
@@ -388,7 +409,7 @@ func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	buf := args.arg5
 	addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(buf))
 	if !ok {
-		text_mode_print_errorln("invalid adress in statx")
+		kerrorln("invalid adress in statx")
 		return 0, syscall.EFAULT
 	}
 	item := (*statxData)(unsafe.Pointer(addr))
@@ -416,7 +437,7 @@ func linuxUnameSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	buf := args.arg1
 	addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(buf))
 	if !ok {
-		text_mode_print_errorln("invalid adress in uname")
+		kerrorln("invalid adress in uname")
 		return 0, syscall.EFAULT
 	}
 	provided := (*utsname)(unsafe.Pointer(addr))
@@ -469,7 +490,7 @@ func linuxMincoreSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	//addr := currentThread.regs.EBX
 	vecAddr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(vec))
 	if !ok {
-		text_mode_print_errorln("Could not look up vec array")
+		kerrorln("Could not look up vec array")
 		return 0, syscall.EFAULT
 	}
 
@@ -516,37 +537,50 @@ func linuxBrkSyscall(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
-	target := args.arg1
-	size := args.arg2
+	target := uintptr(args.arg1)
+	size := uintptr(args.arg2)
 	prot := args.arg3
+	flags := args.arg4
 	if target == 0 {
-		target = uint32(currentThread.domain.MemorySpace.VmTop)
+		target = currentThread.domain.MemorySpace.VmTop
+	}
+	if target+uintptr(size) < KERNEL_RESERVED {
+		return 0, syscall.EINVAL
 	}
 	if prot == 0 {
-		return uint32(currentThread.domain.MemorySpace.VmTop), ESUCCESS
+		return uint32(target), ESUCCESS
 	}
-	//text_mode_print("vmtop: ")
-	//text_mode_print_hex32(uint32(currentThread.domain.MemorySpace.VmTop))
-	//text_mode_print(" target: ")
-	//text_mode_print_hex32(currentThread.regs.EBX)
-	//text_mode_print(" size: ")
-	//text_mode_print_hex32(size)
-	//text_mode_print(" prot: ")
-	//text_mode_print_hex32(currentThread.regs.EDX)
-	//text_mode_print(" flags: ")
-	//text_mode_print_hex32(currentThread.regs.ESI)
-	//text_mode_println("")
-	for i := uint32(0); i < size; i += PAGE_SIZE {
+
+	startAddr := currentThread.domain.MemorySpace.findSpaceFor(target, size)
+
+	if flags&MMAP_MAP_FIXED == MMAP_MAP_FIXED {
+		startAddr = target
+	} else if startAddr == 0 {
+		return 0, syscall.EINVAL
+	}
+
+	for i := startAddr; i < startAddr+size; i += PAGE_SIZE {
 		p := allocPage()
 		Memclr(p, PAGE_SIZE)
-		flags := uint8(PAGE_PERM_USER | PAGE_RW)
-		if target+i < KERNEL_RESERVED {
-			return 0, syscall.EINVAL
+		pageFlags := uint8(PAGE_PERM_USER)
+		if prot&MMAP_PROT_WRITE == MMAP_PROT_WRITE {
+			pageFlags |= PAGE_RW
 		}
-		currentThread.domain.MemorySpace.mapPage(p, uintptr(target+i), flags)
+
+		if currentThread.domain.MemorySpace.getPageTableEntry(i).isPresent() {
+			if flags&MMAP_MAP_FIXED == MMAP_MAP_FIXED {
+				// TODO: Clear or free and remap page?
+				// currentThread.domain.MemorySpace.unMapPage(i)
+			} else {
+				// TODO: What to do here?
+				kernelPanic("Trying to map page which is already present without MAP_FIXED")
+			}
+		} else {
+			currentThread.domain.MemorySpace.mapPage(p, i, pageFlags)
+		}
 	}
-	//text_mode_print_hex32(target)
-	return target, ESUCCESS
+
+	return uint32(startAddr), ESUCCESS
 }
 
 func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -590,7 +624,9 @@ func linuxOpenSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EFAULT
 	}
 	s := cstring(addr)
-	kdebugln("[SYS-OPEN] ", s)
+	if PRINT_SYSCALL {
+		kdebugln("[SYS-OPEN] ", s)
+	}
 	//text_mode_println(s)
 	return 0, syscall.ENOSYS
 	//printRegisters(currentInfo, regs)
@@ -606,9 +642,11 @@ func linuxOpenAtSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EFAULT
 	}
 	s1 := cstring(pathaddr)
-	kdebugln("[SYS-OPENAT] fd:", fd)
-	kdebugln("[SYS-OPENAT] path:", s1)
-	kdebugln("[SYS-OPENAT] flags:", flags)
+	if PRINT_SYSCALL {
+		kdebugln("[SYS-OPENAT] fd:", fd)
+		kdebugln("[SYS-OPENAT] path:", s1)
+		kdebugln("[SYS-OPENAT] flags:", flags)
+	}
 
 	if s1 == "/dev/null" {
 		return 42, ESUCCESS
@@ -630,7 +668,7 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	addr, ok := currentThread.domain.MemorySpace.getPhysicalAddress(uintptr(arr))
 	if !ok {
-		text_mode_print_errorln("Could not look up string addr")
+		kerrorln("Could not look up string addr")
 		return 0, syscall.EFAULT
 	}
 	iovecs := *(*[]ioVec)(unsafe.Pointer(&reflect.SliceHeader{

@@ -181,7 +181,9 @@ func restoreFpRegs(buffer uintptr)
 
 func AddDomain(d *domain) {
 	allDomains.Append(d)
-	kdebugln("Added new domain with pid ", d.pid)
+	if ENABLE_DEBUG {
+		kdebugln("Added new domain with pid ", d.pid)
+	}
 	if currentDomain == nil || currentThread == nil {
 		currentDomain = allDomains.head
 		currentThread = currentDomain.runningThreads.thread
@@ -219,7 +221,9 @@ func cleanUpDomain(d *domain) {
 	d.MemorySpace.freeAllPages()
 
 	// Clean up kernel resources
-	kdebugln("Allocated pages ", allocatedPages)
+	if ENABLE_DEBUG {
+		kdebugln("Allocated pages ", allocatedPages)
+	}
 	Schedule()
 	freePage((uintptr)(unsafe.Pointer(d)))
 }
@@ -242,7 +246,9 @@ func ExitThread(t *thread) {
 		ExitDomain(t.domain) // does not return
 	}
 	t.domain.RemoveThread(t)
-	kdebugln("Removing thread ", t.tid, " from domain ", t.domain.pid)
+	if ENABLE_DEBUG {
+		kdebugln("Removing thread ", t.tid, " from domain ", t.domain.pid)
+	}
 	scheduleStackArg(func(threadPtr uintptr) {
 		thread := (*thread)(unsafe.Pointer(threadPtr))
 		cleanUpThread(thread)

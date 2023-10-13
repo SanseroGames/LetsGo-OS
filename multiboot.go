@@ -12,7 +12,7 @@ const (
 var (
 	multibootInfo *MultibootInfo
 
-	loadedModules [10]MultibootModule
+	loadedModules [20]MultibootModule
 
 	memoryMaps [6]MemoryMap
 )
