@@ -17,19 +17,27 @@ var (
 )
 
 type MultibootInfo struct {
-	total_size uint32
-	reserved   uint32
+	TotalSize uint32
+	reserved  uint32
 }
 
 type multibootType uint32
 
 type MultibootTag struct {
-	typ  multibootType
-	size uint32
+	Type uint32
+	Size uint32
+}
+
+type MultibootMemoryMap struct {
+	MultibootTag // Type is 6
+	EntrySize    uint32
+	EntryVersion uint32
+	Entries      MemoryMap // Take pointer of it and use it as slice with
 }
 
 // A module represents a module to be loaded along with the kernel.
 type MultibootModule struct {
+	MultibootTag
 	// Start is the inclusive start of the Module memory location
 	Start uint32
 
@@ -37,6 +45,19 @@ type MultibootModule struct {
 	End uint32
 
 	// Cmdline is a pointer to a null-terminated ASCII string.
+	cmdline [100]byte
+}
+
+func (m *MultibootModule) Cmdline() string {
+	if m.Size <= 17 {
+		return ""
+	}
+	return unsafe.String(&m.cmdline[0], max(m.Size-16-1, 1))
+}
+
+type Module struct {
+	Start   uint32
+	End     uint32
 	Cmdline string
 }
 
@@ -53,49 +74,49 @@ type MemoryMap struct {
 func InitMultiboot(info *MultibootInfo) {
 	multibootInfo = info
 
-	mbI := unsafe.Slice((*uint32)(unsafe.Add(unsafe.Pointer(info), 8)), info.total_size)
+	mbI := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(info), unsafe.Sizeof(*info))), info.TotalSize-uint32(unsafe.Sizeof(*info)))
 
 	foundModules := 0
-	for i := uint32(0); i < (*info).total_size; {
-		if mbI[i] == 0 && mbI[i+1] == 8 {
+	for i := uint32(0); i < info.TotalSize; {
+		mbTag := (*MultibootTag)(unsafe.Pointer(&mbI[i]))
+		kdebugln("Type ", mbTag.Type, " size ", mbTag.Size, " i ", i, " next ", (i+mbTag.Size+7)&0xfffffff8)
+		if mbTag.Type == 0 && mbTag.Size == 8 {
 			break
 		}
-		if mbI[i] == 3 && foundModules < len(loadedModules) {
-			loadedModules[foundModules].Start = mbI[i+2]
-			loadedModules[foundModules].End = mbI[i+3]
-			loadedModules[foundModules].Cmdline = unsafe.String((*byte)(unsafe.Add(unsafe.Pointer(info), 8+i*4+16)), mbI[i+1]-16-1) //Possible underflow
-			foundModules++
+		if mbTag.Type == 3 {
+			if foundModules < len(loadedModules) {
+				mbMod := (*MultibootModule)(unsafe.Pointer(mbTag))
+
+				loadedModules[foundModules] = *mbMod
+				kdebugln(mbMod.Cmdline())
+				kdebugln(loadedModules[foundModules].Cmdline())
+				kdebugln(uintptr(loadedModules[foundModules].Start), " ", uintptr(loadedModules[foundModules].End), " ", loadedModules[foundModules].Size, " ", loadedModules[foundModules].cmdline[0])
+				foundModules++
+			} else {
+				kerrorln("[WARNING] Not enough space to load all modules")
+			}
 		}
-		if mbI[i] == 6 {
-			size := mbI[i+1]
-			esize := mbI[i+2]
-			nrentries := (size - 16) / esize
-			maps := unsafe.Slice((*MemoryMap)(unsafe.Add(unsafe.Pointer(info), 8+i*4+16)), nrentries)
-			copy(memoryMaps[:], maps)
+		if mbTag.Type == 6 {
+			memTag := (*MultibootMemoryMap)(unsafe.Pointer(mbTag))
+			nrentries := (memTag.Size - 16) / memTag.EntrySize
+			maps := unsafe.Slice(&(memTag.Entries), nrentries)
+			for i, v := range maps {
+				if i > len(memoryMaps) {
+					kerrorln("[WARNING] More memory maps than space in memorymap list")
+					break
+				}
+				// kdebugln(uintptr(v.BaseAddr), " ", uintptr(v.Length), " ", v.Type)
+				memoryMaps[i] = v
+			}
 		}
 		oldi := i
-		size := mbI[i+1]
-		i += size / 4
-		if size%4 != 0 {
-			i++
-		}
-		if i%2 == 1 {
-			i++
-		}
+		size := max(mbTag.Size, 8)
+		i = (i + size + 7) & 0xfffffff8
 		if oldi == i {
+			kerrorln("[WARNING] Loading multiboot modules behaved weird")
 			break
 		}
 	}
+	kdebugln("Done")
 	//printMemMaps()
-}
-
-func printMemMaps() {
-	for _, n := range memoryMaps {
-		text_mode_print_hex32(uint32(n.BaseAddr))
-		text_mode_print(" ")
-		text_mode_print_hex32(uint32(n.Length))
-		text_mode_print(" ")
-		text_mode_print_hex32(n.Type)
-		text_mode_println("")
-	}
 }

@@ -168,7 +168,7 @@ func (l *domainList) Remove(d *domain) {
 }
 
 var (
-	currentThread  *thread    = nil
+	currentThread  *thread    = &scheduleThread
 	currentDomain  *domain    = nil
 	allDomains     domainList = domainList{head: nil, tail: nil}
 	largestPid     uint32     = 0x0

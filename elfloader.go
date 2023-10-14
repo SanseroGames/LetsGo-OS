@@ -112,14 +112,14 @@ func LoadAuxVector(buf []auxVecEntry, elfHdr *elf.Header32, loadAddr uintptr) in
 func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintptr, uintptr) {
 	var module MultibootModule
 	for _, n := range loadedModules {
-		if n.Cmdline == multibootModule {
+		if n.Cmdline() == multibootModule {
 			module = n
 			break
 		}
 	}
 
-	if module.Cmdline != multibootModule {
-		kerrorln("[ELF] Unknown module: ", multibootModule, " ", module.Cmdline)
+	if module.Cmdline() != multibootModule {
+		kerrorln("[ELF] Unknown module: ", multibootModule, " ", module.Cmdline())
 		return nil, 0, 0
 	}
 	moduleLen := int(module.End - module.Start)
