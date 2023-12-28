@@ -16,6 +16,8 @@ type domain struct {
 
 	runningThreads threadList
 	blockedThreads threadList
+
+	programName string
 }
 
 func (d *domain) AddThread(t *thread) {

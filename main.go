@@ -121,6 +121,7 @@ func printFuncName(pc uintptr) {
 
 func panicHelper(thread *thread) {
 	kprintln("Domain ID: ", thread.domain.pid, ", Thread ID: ", thread.tid)
+	kprintln("Program name: ", thread.domain.programName)
 	if thread.isKernelInterrupt {
 		kprint("In kernel function: ")
 		printFuncName(thread.kernelInfo.EIP)

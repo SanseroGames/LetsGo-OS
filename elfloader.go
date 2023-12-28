@@ -109,30 +109,30 @@ func LoadAuxVector(buf []auxVecEntry, elfHdr *elf.Header32, loadAddr uintptr) in
 	return start
 }
 
-func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintptr, uintptr) {
-	var module MultibootModule
-	for _, n := range loadedModules {
+func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintptr, uintptr, *MultibootModule) {
+	var module *MultibootModule
+	for i, n := range loadedModules {
 		if n.Cmdline() == multibootModule {
-			module = n
+			module = &loadedModules[i]
 			break
 		}
 	}
 
 	if module.Cmdline() != multibootModule {
 		kerrorln("[ELF] Unknown module: ", multibootModule, " ", module.Cmdline())
-		return nil, 0, 0
+		return nil, 0, 0, nil
 	}
 	moduleLen := int(module.End - module.Start)
 	// catch weird things...
 	if moduleLen < 4 {
-		return nil, 0, 0
+		return nil, 0, 0, nil
 	}
 	elfData := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(module.Start))), moduleLen)
 
 	// Test if really elf file
 	if elfData[0] != 0x7f || elfData[1] != 'E' || elfData[2] != 'L' || elfData[3] != 'F' {
 		kerrorln("[ELF] '", multibootModule, "' is not a ELF file")
-		return nil, 0, 0
+		return nil, 0, 0, nil
 	}
 
 	elfHeader := (*elf.Header32)(unsafe.Pointer(uintptr(module.Start)))
@@ -193,6 +193,6 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 
 		}
 	}
-	return elfHeader, baseAddr, uintptr(topAddr)
+	return elfHeader, baseAddr, uintptr(topAddr), module
 
 }
