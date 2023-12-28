@@ -218,14 +218,14 @@ func cleanUpDomain(d *domain) {
 		d.blockedThreads.Dequeue(cur)
 	}
 	// Clean allocated memory
-	d.MemorySpace.freeAllPages()
+	d.MemorySpace.FreeAllPages()
 
 	// Clean up kernel resources
 	if ENABLE_DEBUG {
-		kdebugln("Allocated pages ", allocatedPages)
+		kdebugln("Allocated pages ", allocatedPages, " (out of", maxPages, ")")
 	}
 	Schedule()
-	freePage((uintptr)(unsafe.Pointer(d)))
+	FreePage((uintptr)(unsafe.Pointer(d)))
 }
 
 // Execute on scheduleStack
@@ -233,8 +233,8 @@ func cleanUpThread(t *thread) {
 	// TODO; Adjust when thread control block is no longer a single page
 	threadPtr := (uintptr)(unsafe.Pointer(t))
 	threadDomain := t.domain
-	threadDomain.MemorySpace.unMapPage(t.kernelStack.lo)
-	threadDomain.MemorySpace.unMapPage(threadPtr)
+	threadDomain.MemorySpace.UnmapPage(t.kernelStack.lo)
+	threadDomain.MemorySpace.UnmapPage(threadPtr)
 	if currentThread == t {
 		currentThread = nil
 	}

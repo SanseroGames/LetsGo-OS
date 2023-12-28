@@ -72,17 +72,17 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 
 	var err int
 	for i := 0; i < len(progs); i++ {
-		newDomainMem := allocPage()
+		newDomainMem := AllocPage()
 		Memclr(newDomainMem, PAGE_SIZE)
 		newDomain := (*domain)(unsafe.Pointer(newDomainMem))
-		newThreadMem := allocPage()
+		newThreadMem := AllocPage()
 		Memclr(newThreadMem, PAGE_SIZE)
 		newThread := (*thread)(unsafe.Pointer(newThreadMem))
 		err = StartProgram(progs[i], newDomain, newThread)
 		if err != 0 {
 			kernelPanic("Could not start program")
 		}
-		newDomain.MemorySpace.mapPage(newThreadMem, newThreadMem, PAGE_RW|PAGE_PERM_KERNEL)
+		newDomain.MemorySpace.MapPage(newThreadMem, newThreadMem, PAGE_RW|PAGE_PERM_KERNEL)
 		AddDomain(newDomain)
 	}
 
@@ -108,7 +108,7 @@ func gpfPanic() {
 }
 
 func printFuncName(pc uintptr) {
-	f := findfuncTest(pc)
+	f := runtimeFindFunc(pc)
 	if !f.valid() {
 		kprintln("func: ", pc)
 		return
@@ -154,7 +154,7 @@ func do_kernelPanic(caller uintptr, msg string) {
 
 func printThreadRegisters(t *thread, w io.Writer) {
 	kFprint(w, "User regs:          Kernel regs:\n")
-	f := findfuncTest(uintptr(t.kernelInfo.EIP))
+	f := runtimeFindFunc(uintptr(t.kernelInfo.EIP))
 	kFprint(w, "EIP: ", t.info.EIP, "      ", "EIP: ", t.kernelInfo.EIP, " ", f._Func().Name(), "\n")
 	//rintRegisterLineInfo("EIP: ", t.info.EIP, t.kernelInfo.EIP, f._Func().Name())
 	printRegisterLine(w, 20, "ESP: ", t.info.ESP, t.kernelInfo.ESP)

@@ -45,8 +45,8 @@ func (f funcInfo) valid() bool {
 	return f._func != nil
 }
 
-//go:linkname findfuncTest runtime.findfunc
-func findfuncTest(pc uintptr) funcInfo
+//go:linkname runtimeFindFunc runtime.findfunc
+func runtimeFindFunc(pc uintptr) funcInfo
 
 type tssEntry struct {
 	prev_tss uint32 // The previous TSS - with hardware task switching these form a kind of backward linked list.
@@ -126,7 +126,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
 	newThreadAddr := (uintptr)(unsafe.Pointer(outThread))
 	Memclr(newThreadAddr, int(unsafe.Sizeof(outThread)))
 	outThread.fpOffset = 0xffffffff
-	kernelStack := allocPage()
+	kernelStack := AllocPage()
 	if ENABLE_DEBUG {
 		kdebugln("thread stack ", kernelStack)
 	}
@@ -140,7 +140,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
 	outThread.kernelInfo.SS = KDS_SELECTOR
 	outThread.kernelRegs.GS = KGS_SELECTOR
 	outThread.kernelInfo.EFLAGS = EFLAGS_R
-	targetDomain.MemorySpace.mapPage(kernelStack, kernelStack, PAGE_RW|PAGE_PERM_KERNEL)
+	targetDomain.MemorySpace.MapPage(kernelStack, kernelStack, PAGE_RW|PAGE_PERM_KERNEL)
 
 	outThread.info.CS = defaultUserSegments.cs | 3
 	outThread.info.SS = defaultUserSegments.ss | 3
@@ -187,7 +187,7 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 		return 1
 	}
 	outDomain.Segments = defaultUserSegments
-	outDomain.MemorySpace = createNewPageDirectory()
+	outDomain.MemorySpace = CreateNewPageDirectory()
 
 	elfHdr, loadAddr, topAddr := LoadElfFile(path, &outDomain.MemorySpace)
 
@@ -199,9 +199,9 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 	}
 	var stackPages [defaultStackPages]uintptr
 	for i := 0; i < defaultStackPages; i++ {
-		stack := allocPage()
+		stack := AllocPage()
 		Memclr(stack, PAGE_SIZE)
-		outDomain.MemorySpace.mapPage(stack, defaultStackStart-uintptr((i+1)*PAGE_SIZE), PAGE_RW|PAGE_PERM_USER)
+		outDomain.MemorySpace.MapPage(stack, defaultStackStart-uintptr((i+1)*PAGE_SIZE), PAGE_RW|PAGE_PERM_USER)
 		stackPages[i] = stack
 	}
 

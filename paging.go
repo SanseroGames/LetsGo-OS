@@ -33,9 +33,23 @@ var (
 	freePagesList  *page
 	kernelMemSpace MemSpace = MemSpace{}
 	allocatedPages int      = 0
+	maxPages       int      = 0
 )
 
 type PageTable [ENTRIES_PER_TABLE]pageTableEntry
+
+func (pt *PageTable) getEntryIndex(virtAddr uintptr) uintptr {
+	return virtAddr >> 12 & ((1 << 10) - 1)
+}
+
+func (pt *PageTable) getEntry(virtAddr uintptr) *pageTableEntry {
+	return &pt[pt.getEntryIndex((virtAddr))]
+}
+
+func (pt *PageTable) setEntry(virtAddr uintptr, physAddr uintptr, flags uintptr) {
+	e := pageTableEntry(physAddr | flags)
+	pt[pt.getEntryIndex((virtAddr))] = e
+}
 
 type pageTableEntry uintptr
 
@@ -51,6 +65,14 @@ func (e pageTableEntry) isUserAccessible() bool {
 	return e&PAGE_PERM_USER > 0
 }
 
+func (e pageTableEntry) getPhysicalAddress() uintptr {
+	return uintptr(e &^ (PAGE_SIZE - 1))
+}
+
+func (e pageTableEntry) asPageTable() *PageTable {
+	return (*PageTable)(unsafe.Pointer(e.getPhysicalAddress()))
+}
+
 type page struct {
 	next *page
 }
@@ -61,119 +83,37 @@ type MemSpace struct {
 	Brk           uintptr
 }
 
-func enablePaging()
+func (m *MemSpace) getPageTable(virtAddr uintptr) *PageTable {
+	e := m.PageDirectory.getEntry(virtAddr >> 10)
 
-func switchPageDir(dir *PageTable)
+	if !e.isPresent() {
+		// No page table present
+		addr := AllocPage()
+		Memclr(addr, PAGE_SIZE)
+		// User perm here to allow all entries in page table to be possibly accessed by
+		// user. User does not have access to page table though.
+		m.PageDirectory.setEntry(virtAddr>>10, addr, PAGE_PRESENT|PAGE_RW|PAGE_PERM_USER)
 
-func getCurrentPageDir() *PageTable
-
-func getPageFaultAddr() uint32
-
-func pageFaultHandler() {
-	code := currentThread.info.ExceptionCode
-	kerrorln("\nPage Fault! Disabling Interrupt and halting!")
-	kprintln("Exception code: ", uintptr(code))
-	kprintln("Present: ", (code&PAGE_FAULT_PRESENT)>>(PAGE_FAULT_PRESENT>>1),
-		" Write: ", (code&PAGE_FAULT_WRITE)>>(PAGE_FAULT_WRITE>>1),
-		" user: ", (code&PAGE_FAULT_USER)>>(PAGE_FAULT_USER>>1),
-		" instructino: ", (code&PAGE_FAULT_INSTRUCTION_FETCH)>>(PAGE_FAULT_INSTRUCTION_FETCH>>1))
-	causingAddr := getPageFaultAddr()
-	kprint("Causing Address: ", uintptr(causingAddr))
-	f := findfuncTest(uintptr(causingAddr))
-	if f.valid() {
-		s := f._Func().Name()
-		file, line := f._Func().FileLine(uintptr(causingAddr))
-		_, filename := path.Split(file)
-		kprint(" (", s, " (", filename, ":", line, ")", ")")
 	}
-	kprintln("")
-	kprintln("Current Page Directory: ", (uintptr)(unsafe.Pointer(getCurrentPageDir())))
-	kernelPanic("Page Fault")
-}
 
-func Memclr(p uintptr, n int) {
-	s := (*(*[1 << 30]byte)(unsafe.Pointer(p)))[:n]
-	// the compiler will emit runtime.memclrNoHeapPointers
-	for i := range s {
-		s[i] = 0
-	}
-}
-
-func freePage(addr uintptr) {
-	if addr%PAGE_SIZE != 0 {
-		kdebugln("[PAGE] WARNING: freeingPage but is not page aligned: ", addr)
-		return
-	}
-	// Just to check for immediate double free
-	// If I were to check for double freeing correctly I would have to traverse the list
-	// everytime completely but that would make freeing O(n)
-	if addr == uintptr(unsafe.Pointer(freePagesList)) {
-		kdebugln("[Page] immediate double freeing page ", addr)
-		kernelPanic("[Page] double freeing page")
-	}
-	p := (*page)(unsafe.Pointer(addr))
-	p.next = freePagesList
-	freePagesList = p
-	allocatedPages--
-}
-
-func allocPage() uintptr {
-	if freePagesList == nil {
-		kernelPanic("[PAGE] Out of pages to allocate")
-	}
-	p := freePagesList
-	freePagesList = p.next
-	allocatedPages++
-	if PAGE_DEBUG {
-		kdebugln("[PAGE]: Allocated ", unsafe.Pointer(p))
-	}
-	return uintptr(unsafe.Pointer(p))
-}
-
-func createNewPageDirectory() MemSpace {
-	var ret MemSpace
-	ret.PageDirectory = (*PageTable)(unsafe.Pointer(allocPage()))
-	Memclr(uintptr(unsafe.Pointer(ret.PageDirectory)), PAGE_SIZE)
-	for i := uint64(KERNEL_START); i < KERNEL_RESERVED; i += PAGE_SIZE {
-		ret.tryMapPage(uintptr(i), uintptr(i), PAGE_RW|PAGE_PERM_KERNEL)
-	}
-	return ret
-}
-
-// Would be better to return addres when multitasking
-func (m *MemSpace) getPageTable(page uintptr) pageTableEntry {
-	directoryIndex := page >> 22
-	e := m.PageDirectory[directoryIndex]
-	if e.isPresent() {
-		return e
-	}
-	// No pagetable present
-	addr := allocPage()
-	Memclr(addr, PAGE_SIZE)
-	// User perm here to allow all entries in page table to be possibly accessed by
-	// user. User does not have access to page table though.
-	e = pageTableEntry(addr | PAGE_PRESENT | PAGE_RW | PAGE_PERM_USER)
-	m.PageDirectory[directoryIndex] = e
-	return e
+	return e.asPageTable()
 }
 
 func (m *MemSpace) tryMapPage(page uintptr, virtAddr uintptr, flags uint8) bool {
+
 	pt := m.getPageTable(virtAddr)
-	pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
-	pageIndex := virtAddr >> 12 & ((1 << 10) - 1)
-	e := pta[pageIndex]
+	e := pt.getEntry(virtAddr)
 	if e.isPresent() {
 		return false
 	}
-	e = pageTableEntry(page | uintptr(flags) | PAGE_PRESENT)
-	pta[pageIndex] = e
+	pt.setEntry(virtAddr, page, uintptr(flags)|PAGE_PRESENT)
 	if virtAddr >= m.VmTop && virtAddr < 0x8000000 {
 		m.VmTop = virtAddr + PAGE_SIZE
 	}
 	return true
 }
 
-func (m *MemSpace) mapPage(page uintptr, virtAddr uintptr, flags uint8) {
+func (m *MemSpace) MapPage(page uintptr, virtAddr uintptr, flags uint8) {
 	if PAGE_DEBUG {
 		kdebugln("[PAGE] Mapping page ", page, " to virt addr ", virtAddr)
 	}
@@ -184,18 +124,15 @@ func (m *MemSpace) mapPage(page uintptr, virtAddr uintptr, flags uint8) {
 	}
 }
 
-func (m *MemSpace) unMapPage(virtAddr uintptr) {
+func (m *MemSpace) UnmapPage(virtAddr uintptr) {
 	if PAGE_DEBUG {
 		kdebugln("[PAGE] Unmapping page ", virtAddr)
 	}
 	pt := m.getPageTable(virtAddr)
-	pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
-	pageIndex := virtAddr >> 12 & ((1 << 10) - 1)
-	e := pta[pageIndex]
+	e := pt.getEntry(virtAddr)
 	if e.isPresent() {
-		phAddr := uintptr(e&^(PAGE_SIZE-1)) | (virtAddr & (PAGE_SIZE - 1))
-		pta[pageIndex].unsetPresent()
-		freePage(phAddr)
+		e.unsetPresent()
+		FreePage(e.getPhysicalAddress())
 	} else {
 		if PAGE_DEBUG {
 			kdebugln("[PAGE] WARNING: Page was already unmapped")
@@ -203,15 +140,12 @@ func (m *MemSpace) unMapPage(virtAddr uintptr) {
 	}
 }
 
-func (m *MemSpace) getPageTableEntry(virtAddr uintptr) pageTableEntry {
-	pageAddr := virtAddr &^ (PAGE_SIZE - 1)
-	pt := m.getPageTable(pageAddr)
-	pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
-	pageIndex := pageAddr >> 12 & ((1 << 10) - 1)
-	return pta[pageIndex]
+func (m *MemSpace) getPageTableEntry(virtAddr uintptr) *pageTableEntry {
+	pt := m.getPageTable(virtAddr)
+	return pt.getEntry(virtAddr)
 }
 
-func (m *MemSpace) findSpaceFor(startAddr uintptr, length uintptr) uintptr {
+func (m *MemSpace) FindSpaceFor(startAddr uintptr, length uintptr) uintptr {
 	if PAGE_DEBUG {
 		kdebugln("[PAGE] Find space for ", startAddr, " with size ", length)
 	}
@@ -251,42 +185,121 @@ func (m *MemSpace) findSpaceFor(startAddr uintptr, length uintptr) uintptr {
 	return 0
 }
 
-func (m *MemSpace) getPhysicalAddress(virtAddr uintptr) (uintptr, bool) {
+func (m *MemSpace) GetPhysicalAddress(virtAddr uintptr) (uintptr, bool) {
 	pageAddr := virtAddr &^ (PAGE_SIZE - 1)
 	pt := m.getPageTable(pageAddr)
-	pta := (*PageTable)(unsafe.Pointer(pt &^ ((1 << 12) - 1)))
-	pageIndex := pageAddr >> 12 & ((1 << 10) - 1)
-	e := pta[pageIndex]
+	e := pt.getEntry(virtAddr)
 	if !e.isPresent() || !e.isUserAccessible() {
 		return 0, false
 	} else {
 		if PAGE_DEBUG {
 			// kdebugln("[PAGING] Translated address: ", virtAddr, "->", uintptr(e&^(PAGE_SIZE-1)))
 		}
-		return uintptr(e&^(PAGE_SIZE-1)) | (virtAddr & (PAGE_SIZE - 1)), true
+		return uintptr(e.getPhysicalAddress()) | (virtAddr & (PAGE_SIZE - 1)), true
 	}
 }
 
-func (m *MemSpace) freeAllPages() {
-	for tableIdx, table := range m.PageDirectory {
-		if !table.isPresent() {
-			// Ignore kernel reserved mappings and tables that are not present
+func (m *MemSpace) FreeAllPages() {
+	for tableIdx, tableEntry := range m.PageDirectory {
+		if !tableEntry.isPresent() {
+			// tables that are not present don't need to be freed
 			continue
 		}
-		pta := (*PageTable)(unsafe.Pointer(table &^ ((1 << 12) - 1)))
+		pta := tableEntry.asPageTable()
 		if tableIdx > (KERNEL_RESERVED >> 22) {
 			for i, entry := range pta {
 				virtAddr := uintptr((tableIdx << 22) + (i << 12))
 				if !entry.isPresent() || virtAddr <= KERNEL_RESERVED {
+					// Ignore kernel reserved mappings and tables that are not present
 					continue
 				}
-				m.unMapPage(virtAddr)
+				m.UnmapPage(virtAddr)
 			}
 		}
-		table.unsetPresent()
-		freePage(uintptr(unsafe.Pointer(pta)))
+		tableEntry.unsetPresent()
+		FreePage(tableEntry.getPhysicalAddress())
 	}
-	freePage(uintptr(unsafe.Pointer(m.PageDirectory)))
+	FreePage(uintptr(unsafe.Pointer(m.PageDirectory)))
+}
+
+func enablePaging()
+
+func switchPageDir(dir *PageTable)
+
+func getCurrentPageDir() *PageTable
+
+func getPageFaultAddr() uint32
+
+func pageFaultHandler() {
+	code := currentThread.info.ExceptionCode
+	kerrorln("\nPage Fault! Disabling Interrupt and halting!")
+	kprintln("Exception code: ", uintptr(code))
+	kprintln("Present: ", (code&PAGE_FAULT_PRESENT)>>(PAGE_FAULT_PRESENT>>1),
+		" Write: ", (code&PAGE_FAULT_WRITE)>>(PAGE_FAULT_WRITE>>1),
+		" user: ", (code&PAGE_FAULT_USER)>>(PAGE_FAULT_USER>>1),
+		" instruction: ", (code&PAGE_FAULT_INSTRUCTION_FETCH)>>(PAGE_FAULT_INSTRUCTION_FETCH>>1))
+	causingAddr := getPageFaultAddr()
+	kprint("Causing Address: ", uintptr(causingAddr))
+	f := runtimeFindFunc(uintptr(causingAddr))
+	if f.valid() {
+		s := f._Func().Name()
+		file, line := f._Func().FileLine(uintptr(causingAddr))
+		_, filename := path.Split(file)
+		kprint(" (", s, " (", filename, ":", line, ")", ")")
+	}
+	kprintln("")
+	kprintln("Current Page Directory: ", (uintptr)(unsafe.Pointer(getCurrentPageDir())))
+	kernelPanic("Page Fault")
+}
+
+func Memclr(p uintptr, n int) {
+	s := (*(*[1 << 30]byte)(unsafe.Pointer(p)))[:n]
+	// the compiler will emit runtime.memclrNoHeapPointers
+	for i := range s {
+		s[i] = 0
+	}
+}
+
+func FreePage(addr uintptr) {
+	if addr%PAGE_SIZE != 0 {
+		kdebugln("[PAGE] WARNING: freeingPage but is not page aligned: ", addr)
+		return
+	}
+	// Just to check for immediate double free
+	// If I were to check for double freeing correctly I would have to traverse the list
+	// every time completely but that would make freeing O(n)
+	if addr == uintptr(unsafe.Pointer(freePagesList)) {
+		kdebugln("[Page] immediate double freeing page ", addr)
+		kernelPanic("[Page] double freeing page")
+	}
+	p := (*page)(unsafe.Pointer(addr))
+	p.next = freePagesList
+	freePagesList = p
+	allocatedPages--
+}
+
+func AllocPage() uintptr {
+	if freePagesList == nil {
+		kernelPanic("[PAGE] Out of pages to allocate")
+	}
+	p := freePagesList
+	freePagesList = p.next
+	allocatedPages++
+	if PAGE_DEBUG {
+		kdebugln("[PAGE]: Allocated ", unsafe.Pointer(p))
+	}
+	return uintptr(unsafe.Pointer(p))
+}
+
+func CreateNewPageDirectory() MemSpace {
+	var ret MemSpace
+	addr := AllocPage()
+	Memclr(addr, PAGE_SIZE)
+	ret.PageDirectory = (*PageTable)(unsafe.Pointer(addr))
+	for i := uint64(KERNEL_START); i < KERNEL_RESERVED; i += PAGE_SIZE {
+		ret.tryMapPage(uintptr(i), uintptr(i), PAGE_RW|PAGE_PERM_KERNEL)
+	}
+	return ret
 }
 
 func InitPaging() {
@@ -307,47 +320,43 @@ func InitPaging() {
 			startAddr = KERNEL_RESERVED
 		}
 		for i := startAddr; i < uintptr(p.BaseAddr+p.Length); i += PAGE_SIZE {
-			freePage(i)
+			FreePage(i)
 		}
 	}
 
-	kernelPageDirectory := (*PageTable)(unsafe.Pointer(allocPage()))
-	Memclr(uintptr(unsafe.Pointer(kernelPageDirectory)), PAGE_SIZE)
+	maxPages = -allocatedPages
+	allocatedPages = 0
+	addr := AllocPage()
+	Memclr(addr, PAGE_SIZE)
+	kernelPageDirectory := (*PageTable)(unsafe.Pointer(addr))
 	kernelMemSpace.PageDirectory = kernelPageDirectory
-	//for _,p := range memoryMaps {
-	//    startAddr := p.BaseAddr &^ (PAGE_SIZE - 1)
-	//    lastAddr := p.BaseAddr + p.Length - 1
-	//    for i:= startAddr; i < lastAddr; i += PAGE_SIZE {
-	//        tryMapPage(uintptr(i), uintptr(i), PAGE_RW | PAGE_PERM_KERNEL , kernelPageDirectory)
-	//    }
-	//}
-	//text_mode_print_hex32(uint32(topAddr))
-	//text_mode_println("")
-	//text_mode_print_hex32(uint32(uintptr(unsafe.Pointer(kernelPageDirectory))))
-	//text_mode_println("")
-	for i := uint64(0); i < topAddr; i += PAGE_SIZE {
+	// printPageTable(kernelPageDirectory, 0, 1024)
+
+	for i := uintptr(0); i < uintptr(topAddr); i += PAGE_SIZE {
 		flag := uint8(PAGE_PERM_KERNEL)
 		// TODO: Get address somewhere
 		// if i < 0x150000 || i >= 0x199000 {
 		// 	flag |= PAGE_RW
 		// }
-		kernelMemSpace.tryMapPage(uintptr(i), uintptr(i), flag)
+		kernelMemSpace.tryMapPage(i, i, flag)
 	}
 	switchPageDir(kernelPageDirectory)
+
+	if PAGE_DEBUG {
+		kdebugln("[PAGE] Got ", maxPages, " pages. Initialization took ", allocatedPages, " pages")
+	}
 	allocatedPages = 0
 	SetInterruptHandler(0xE, pageFaultHandler, KCS_SELECTOR, PRIV_USER)
 	enablePaging()
-	//printPageTable((*PageTable)(unsafe.Pointer(kernelPageDirectory[0] &^ ((1 << 12) - 1))))
 }
 
 func printPageTable(table *PageTable, start, length int) {
-	// length of 192 fills the screen
 	for i, n := range table[start : start+length] {
-		text_mode_print_hex32(uint32(n))
-		if i%8 == 7 {
-			text_mode_println("")
+		kdebug(uintptr(n))
+		if i%16 == 15 {
+			kdebugln("")
 		} else {
-			text_mode_print(" ")
+			kdebug(" ")
 		}
 	}
 }
