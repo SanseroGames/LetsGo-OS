@@ -211,19 +211,6 @@ func printTid(w io.Writer, t *thread) {
 	kFprint(w, "Pid: ", t.domain.pid, ", Tid: ", t.tid, "\n")
 }
 
-func debug_print_flags(flags uint8) {
-	res := flags
-	for i := 0; i < 8; i++ {
-		if res&uint8(1) == 1 {
-			text_mode_print_char(0x30 + uint8(i))
-		}
-		res = res >> 1
-	}
-
-	text_mode_print_char(0x0a)
-
-}
-
 func delay(v int) {
 	for i := 0; i < 684000; i++ {
 		for j := 0; j < v; j++ {

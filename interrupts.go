@@ -120,8 +120,7 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 		// Test for scheduler stack underflow
 		DisableInterrupts()
 		Hlt()
-		text_mode_print_hex32(info.ESP)
-		text_mode_print_hex32(uint32(scheduleThread.kernelStack.lo))
+		kprintln(uintptr(info.ESP), " ", uintptr(scheduleThread.kernelStack.lo))
 		kernelPanic("Stack underflow")
 	}
 
@@ -138,16 +137,9 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 	} else {
 		if regs.KernelESP > uint32(currentThread.kernelStack.hi) ||
 			regs.KernelESP < uint32(currentThread.kernelStack.lo) {
-			text_mode_print_errorln("kernel stack for process is out of range")
-			text_mode_print("KernelESP: ")
-			text_mode_print_hex32(regs.KernelESP)
-			text_mode_print(" Stack Hi: ")
-			text_mode_print_hex32(uint32(currentThread.kernelStack.hi))
-			text_mode_print(" Stack Low: ")
-			text_mode_print_hex32(uint32(currentThread.kernelStack.lo))
-			text_mode_print("\n TSS ESP0: ")
-			text_mode_print_hex32(tss.esp0)
-			text_mode_println("")
+			kerrorln("kernel stack for process is out of range")
+			kprintln("KernelESP: ", uintptr(regs.KernelESP), " Stack Hi: ", currentThread.kernelStack.hi, " Stack Low: ", currentThread.kernelStack.lo)
+			kprintln(" TSS ESP0: ", tss.esp0)
 			kernelPanic("Fix pls")
 		}
 		currentThread.info = info
@@ -243,13 +235,6 @@ func InitInterrupts() {
 
 func printIdt(idt []IdtEntry) {
 	for _, n := range idt {
-		text_mode_print_hex16(n.offsetLow)
-		text_mode_print(" ")
-		text_mode_print_hex16(n.selector)
-		text_mode_print(" ")
-		text_mode_print_hex16(n.flags)
-		text_mode_print(" ")
-		text_mode_print_hex16(n.offsetHigh)
-		text_mode_println("")
+		kdebugln(uintptr(n.offsetLow), " ", uintptr(n.selector), " ", uintptr(n.flags), " ", uintptr(n.offsetHigh))
 	}
 }

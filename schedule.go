@@ -347,9 +347,7 @@ func switchToThread(t *thread) {
 	offset := currentThread.fpOffset
 	if offset != 0xffffffff {
 		if (addr+offset)%16 != 0 {
-			text_mode_print_hex32(uint32(addr))
-			text_mode_print(" ")
-			text_mode_print_hex32(uint32(offset))
+			kprintln(addr, " ", offset)
 			kernelPanic("Cannot restore FP state. Not aligned. Did array move?")
 		}
 		restoreFpRegs(addr + offset)

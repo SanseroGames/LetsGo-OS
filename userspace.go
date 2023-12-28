@@ -183,7 +183,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
 // Need pointer as this function should not do any memory allocations
 func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 	if outDomain == nil || outMainThread == nil {
-		text_mode_print_errorln("Cannot start program. Plase allocate the memory for me")
+		kerrorln("Cannot start program. Please allocate the memory for me")
 		return 1
 	}
 	outDomain.Segments = defaultUserSegments
@@ -194,7 +194,7 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 	outDomain.MemorySpace.Brk = topAddr
 
 	if elfHdr == nil {
-		text_mode_print_errorln("Could not load elf file")
+		kerrorln("Could not load elf file")
 		return 2
 	}
 	var stackPages [defaultStackPages]uintptr

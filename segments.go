@@ -234,17 +234,6 @@ func FlushTlsTable(table []GdtEntry) {
 
 func printGdt(gdt []GdtEntry) {
 	for _, n := range gdt {
-		text_mode_print_hex16(n.limitLow)
-		text_mode_print(" ")
-		text_mode_print_hex16(n.baseLow)
-		text_mode_print(" ")
-		text_mode_print_hex(n.baseMid)
-		text_mode_print(" ")
-		text_mode_print_hex(n.access)
-		text_mode_print(" ")
-		text_mode_print_hex(n.limitHighAndFlags)
-		text_mode_print(" ")
-		text_mode_print_hex(n.baseHigh)
-		text_mode_println("")
+		kdebugln(n.limitLow, " ", n.baseLow, " ", n.baseMid, " ", n.access, " ", n.limitHighAndFlags, " ", n.baseHigh)
 	}
 }

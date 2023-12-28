@@ -586,12 +586,12 @@ func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	u_info := args.arg1
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(u_info))
 	if !ok {
-		text_mode_print_errorln("Could not look up user desc")
+		kerrorln("Could not look up user desc")
 		return 0, syscall.EFAULT
 	}
 	desc := (*UserDesc)(unsafe.Pointer(addr))
 	if desc.Flags&UDESC_SEG_NOT_PRESENT != 0 {
-		text_mode_print_errorln("fixme: not handling updating entries")
+		kerrorln("fixme: not handling updating entries")
 		return 0, syscall.ENOSYS
 	}
 
@@ -701,7 +701,7 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(text))
 	if !ok {
-		text_mode_print_errorln("Could not look up string addr")
+		kerrorln("Could not look up string addr")
 		return 0, syscall.EFAULT
 	}
 	s := unsafe.String((*byte)(unsafe.Pointer(uintptr(addr))), length)
@@ -720,7 +720,7 @@ func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	count := args.arg3
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
 	if !ok {
-		text_mode_print_errorln("Could not look up read addr")
+		kerrorln("Could not look up read addr")
 		return 0, syscall.EFAULT
 	}
 	arr := (*[1 << 30]byte)(unsafe.Pointer(addr))[:count]

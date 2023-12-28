@@ -69,16 +69,14 @@ func (i *AtaIdentify) printInfos() {
 }
 
 func printInfoHelper(name string, data []uint8) {
-	text_mode_print(name)
-	text_mode_print(": ")
+	kdebug(name, ": ")
 	for c, i := range data {
-		text_mode_print_hex(i)
-		text_mode_print(" ")
+		kdebug(i, " ")
 		if c%22 == 21 && c > 0 {
-			text_mode_println("")
+			kdebugln("")
 		}
 	}
-	text_mode_println("")
+	kdebugln("")
 }
 
 const (
@@ -149,7 +147,7 @@ func (d *AtaDrive) Initialize() {
 		/* Nothing there */
 		return
 	} else {
-		text_mode_print_errorln("Unknown device type")
+		kerrorln("Unknown device type")
 		return
 	}
 
@@ -212,7 +210,7 @@ func (d *AtaDrive) Reset() bool {
 		d.delay()
 	}
 	if t == 0 {
-		text_mode_print_errorln("Timeout resetting drive")
+		kerrorln("Timeout resetting drive")
 		return false
 	}
 	return true
@@ -220,7 +218,7 @@ func (d *AtaDrive) Reset() bool {
 
 // TODO: Explicit length?
 func (d *AtaDrive) WriteSectors(address int, buffer []byte) {
-	text_mode_print_errorln("Write does not work :(")
+	kerrorln("Write does not work :(")
 	return
 	if !d.Initialized {
 		return
@@ -231,9 +229,7 @@ func (d *AtaDrive) WriteSectors(address int, buffer []byte) {
 	}
 	count := len(buffer) / 512
 	// TODO: This is dangerous
-	text_mode_print("Writing 0x")
-	text_mode_print_hex(uint8(count))
-	text_mode_println(" sectors")
+	kdebug("Writing ", uintptr(count), " sectors")
 	for i := 0; i < count; i++ {
 		d.workSectors(address+i, 1, buffer, true)
 	}
@@ -274,9 +270,7 @@ func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bo
 	for {
 		s := Inb(d.IOBase + ataStatusRegister)
 		if i > 1000 {
-			text_mode_print_errorln("Timeout trying to read disk")
-			text_mode_print_hex(s)
-			text_mode_println("")
+			kerrorln("Timeout trying to read disk", s)
 			d.Reset()
 			return
 		}
@@ -290,7 +284,7 @@ func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bo
 		i++
 	}
 	if hasError {
-		text_mode_print_errorln("Error while trying to execute disk command")
+		kerrorln("Error while trying to execute disk command")
 		return
 	}
 	offset := 0
@@ -362,44 +356,40 @@ func testReadAndWrite() {
 		hdBuf[i] = byte(i % 256)
 	}
 	copy(hdBuf2[:], hdBuf[:])
-	text_mode_println("Writing Data")
+	kdebugln("Writing Data")
 	//firstDrive.WriteSectors(0, hdBuf[:512])
 	//firstDrive.WriteSectors(1, hdBuf[512:])
 	for i := range hdBuf {
 		hdBuf[i] = 0x42
 	}
-	text_mode_println("Reading Data")
+	kdebugln("Reading Data")
 	firstDrive.ReadSectors(0, 1, hdBuf[:512])
 	firstDrive.ReadSectors(1, 1, hdBuf[512:])
 	//firstDrive.ReadSectors(0, 2, hdBuf[:])
 	for c := range hdBuf {
-		text_mode_print_hex(hdBuf[c])
-		text_mode_print(" ")
+		kdebug(uintptr(hdBuf[c]), " ")
 		if c%512 == 511 && c > 0 {
-			text_mode_println("")
+			kdebugln("")
 		}
 	}
-	text_mode_println("")
+	kdebugln("")
 	for c := range hdBuf2 {
-		text_mode_print_hex(hdBuf2[c])
-		text_mode_print(" ")
+		kdebug(hdBuf2[c], " ")
 		if c%512 == 511 && c > 0 {
-			text_mode_println("")
+			kdebugln("")
 		}
 	}
-	text_mode_println("")
+	kdebugln("")
 	noMatch := false
 	for i := range hdBuf2 {
 		if hdBuf[i] != hdBuf2[i] {
-			text_mode_print_errorln("Buffers don't match!!!")
-			text_mode_print_hex16(uint16(i))
-			text_mode_println("")
+			kerrorln("Buffers don't match!!!", uintptr(i))
 			noMatch = true
 			break
 		}
 	}
 	if !noMatch {
-		text_mode_println("Buffers match")
+		kdebugln("Buffers match")
 	}
 
 }
