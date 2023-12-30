@@ -191,13 +191,13 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 
 	elfHdr, loadAddr, topAddr, module := LoadElfFile(path, &outDomain.MemorySpace)
 
-	outDomain.programName = module.Cmdline()
-	outDomain.MemorySpace.Brk = topAddr
-
-	if elfHdr == nil {
+	if elfHdr == nil || module == nil {
 		kerrorln("Could not load elf file")
 		return 2
 	}
+	outDomain.programName = module.Cmdline()
+	outDomain.MemorySpace.Brk = topAddr
+
 	var stackPages [defaultStackPages]uintptr
 	for i := 0; i < defaultStackPages; i++ {
 		stack := AllocPage()

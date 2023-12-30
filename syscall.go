@@ -148,7 +148,8 @@ const (
 	MMAP_PROT_WRITE = 2
 	MMAP_PROT_EXEC  = 4
 
-	MMAP_MAP_FIXED = 0x10
+	MMAP_MAP_FIXED     = 0x10
+	MMAP_MAP_ANONYMOUS = 0x20
 )
 
 var (
@@ -381,9 +382,6 @@ func linuxEpollCreateSyscall(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func linuxExitGroupSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	//text_mode_print("Exiting domain ")
-	//text_mode_print_hex(uint8(currentThread.domain.pid))
-	//text_mode_println("")
 	ExitDomain(currentThread.domain)
 	PerformSchedule = true
 	// Already in new context so return value from last syscall from current domain
@@ -391,9 +389,6 @@ func linuxExitGroupSyscall(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func linuxExitSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	//text_mode_print("Exiting domain ")
-	//text_mode_print_hex(uint8(currentThread.domain.pid))
-	//text_mode_println("")
 	ExitThread(currentThread)
 	PerformSchedule = true
 	// Already in new context so return value from last syscall from current domain
@@ -447,20 +442,6 @@ func linuxUnameSyscall(args syscallArgs) (uint32, syscall.Errno) {
 func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	flags := args.arg1
 	stack := args.arg2
-	//parent_tid := currentThread.regs.EDX
-	//tls := currentThread.regs.ESI
-	//child_tid := currentThread.regs.EDI
-	//text_mode_print("flags:")
-	//text_mode_print_hex32(flags)
-	//text_mode_print(" stack:")
-	//text_mode_print_hex32(stack)
-	//text_mode_print(" parent:")
-	//text_mode_print_hex32(parent_tid)
-	//text_mode_print(" tls:")
-	//text_mode_print_hex32(tls)
-	//text_mode_print(" child:")
-	//text_mode_print_hex32(child_tid)
-	//text_mode_println("")
 	newThreadMem := AllocPage()
 	Memclr(newThreadMem, PAGE_SIZE)
 	newThread := (*thread)(unsafe.Pointer(newThreadMem))
@@ -479,14 +460,6 @@ func linuxMincoreSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	//addr := args.arg1
 	length := args.arg2
 	vec := args.arg3
-	//text_mode_print(" addr: ")
-	//text_mode_print_hex32(currentThread.regs.EBX)
-	//text_mode_print(" length: ")
-	//text_mode_print_hex32(currentThread.regs.ECX)
-	//text_mode_print(" vec: ")
-	//text_mode_print_hex32(currentThread.regs.EDX)
-	//text_mode_println("")
-	//addr := currentThread.regs.EBX
 	vecAddr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(vec))
 	if !ok {
 		kerrorln("Could not look up vec array")
@@ -540,6 +513,11 @@ func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
 	size := uintptr(args.arg2)
 	prot := args.arg3
 	flags := args.arg4
+
+	if flags&MMAP_MAP_ANONYMOUS == 0 {
+		return 0, syscall.EINVAL
+	}
+
 	if target == 0 {
 		target = currentThread.domain.MemorySpace.VmTop
 	}
@@ -659,13 +637,17 @@ func linuxOpenAtSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	fd := args.arg1
-	arr := args.arg2
+	arr := uintptr(args.arg2)
 	count := args.arg3
 	if fd < 1 || fd > 2 {
 		return 0, syscall.EBADF
 	}
 
-	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(arr))
+	if !currentThread.domain.MemorySpace.isRangeAccessible(arr, arr+uintptr(count*8)) { // todo: sizeof?
+		return 0, syscall.EFAULT
+	}
+
+	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(arr)
 	if !ok {
 		kerrorln("Could not look up string addr")
 		return 0, syscall.EFAULT
@@ -673,6 +655,9 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	iovecs := unsafe.Slice((*ioVec)(unsafe.Pointer(addr)), count)
 	printed := 0
 	for _, n := range iovecs {
+		if !currentThread.domain.MemorySpace.isRangeAccessible(uintptr(n.iovBase), uintptr(n.iovBase)+uintptr(n.iovLen)) {
+			return 0, syscall.EFAULT
+		}
 		addr, ok = currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(n.iovBase))
 		if !ok {
 			return 0, syscall.EFAULT
@@ -690,21 +675,25 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	fd := args.arg1
-	text := args.arg2
+	text := uintptr(args.arg2)
 	length := args.arg3
 	if PRINT_SYSCALL {
-		kdebugln("FD: ", fd, " text: ", uintptr(text), " length: ", length)
+		kdebugln("FD: ", fd, " text: ", text, " length: ", length)
 	}
 	if fd < 1 || fd > 2 {
 		return 0, syscall.EBADF
 	}
 
-	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(text))
+	if !currentThread.domain.MemorySpace.isRangeAccessible(text, text+uintptr(length)) {
+		return 0, syscall.EFAULT
+	}
+
+	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(text)
 	if !ok {
 		kerrorln("Could not look up string addr")
 		return 0, syscall.EFAULT
 	}
-	s := unsafe.String((*byte)(unsafe.Pointer(uintptr(addr))), length)
+	s := unsafe.String((*byte)(unsafe.Pointer(addr)), length)
 
 	if fd == 2 {
 		kerror(s)
@@ -764,24 +753,9 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	futex_op := args.arg2
 	val := args.arg3
 	timeout := args.arg4
-	//uaddr2 := args.arg5
-	//val_3 := args.arg6
-	//text_mode_print("uaddr: ")
-	//text_mode_print_hex32(uaddr)
-	//text_mode_print(" futex_op: ")
-	//text_mode_print_hex32(futex_op)
-	//text_mode_print(" val: ")
-	//text_mode_print_hex32(val)
-	//text_mode_print(" timeout: ")
-	//text_mode_print_hex32(timeout)
-	//text_mode_print(" uaddr2: ")
-	//text_mode_print_hex32(uaddr2)
-	//text_mode_print(" val_3: ")
-	//text_mode_print_hex32(val_3)
-	//text_mode_println("")
 
 	if futex_op&FUTEX_PRIVATE_FLAG == 0 {
-		kerror("Futex on shared futexes is not supported")
+		kerrorln("Futex on shared futexes is not supported")
 		return 0, syscall.ENOSYS
 	}
 

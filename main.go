@@ -10,12 +10,14 @@ var progs = [...]string{
 	// "/usr/cread",
 	// "/usr/helloc",
 	// "/usr/hellocxx",
-	"/usr/hellogo",
+	// "/usr/hellogo",
 	// "/usr/hellorust",
 	// "/usr/readtest",
 	// "/usr/rustread",
 	// "/usr/shell",
 	// "/usr/statx",
+
+	"/usr/syscall-test",
 }
 
 var domains [len(progs)]*domain

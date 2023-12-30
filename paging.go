@@ -186,17 +186,30 @@ func (m *MemSpace) FindSpaceFor(startAddr uintptr, length uintptr) uintptr {
 }
 
 func (m *MemSpace) GetPhysicalAddress(virtAddr uintptr) (uintptr, bool) {
-	pageAddr := virtAddr &^ (PAGE_SIZE - 1)
-	pt := m.getPageTable(pageAddr)
-	e := pt.getEntry(virtAddr)
-	if !e.isPresent() || !e.isUserAccessible() {
+	if !m.isAddressAccessible(virtAddr) {
 		return 0, false
 	} else {
 		if PAGE_DEBUG {
 			// kdebugln("[PAGING] Translated address: ", virtAddr, "->", uintptr(e&^(PAGE_SIZE-1)))
 		}
+		e := m.getPageTableEntry(virtAddr)
 		return uintptr(e.getPhysicalAddress()) | (virtAddr & (PAGE_SIZE - 1)), true
 	}
+}
+
+func (m *MemSpace) isAddressAccessible(virtAddr uintptr) bool {
+	pt := m.getPageTable(virtAddr)
+	e := pt.getEntry(virtAddr)
+	return e.isPresent() && e.isUserAccessible()
+}
+
+func (m *MemSpace) isRangeAccessible(startAddr uintptr, endAddr uintptr) bool {
+	for pageAddr := startAddr &^ PAGE_SIZE; pageAddr < endAddr; pageAddr += PAGE_SIZE {
+		if !m.isAddressAccessible(pageAddr) {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *MemSpace) FreeAllPages() {

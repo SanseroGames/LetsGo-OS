@@ -118,8 +118,8 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 		}
 	}
 
-	if module.Cmdline() != multibootModule {
-		kerrorln("[ELF] Unknown module: ", multibootModule, " ", module.Cmdline())
+	if module == nil || module.Cmdline() != multibootModule {
+		kerrorln("[ELF] Unknown module: ", multibootModule)
 		return nil, 0, 0, nil
 	}
 	moduleLen := int(module.End - module.Start)
