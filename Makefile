@@ -88,6 +88,7 @@ $(BUILD_DIR)/arch/$(ARCH)/asm/%.o: arch/$(ARCH)/asm/%.s
 	@$(AS) $(AS_FLAGS) $< -o $@ || exit 1
 
 iso: $(iso_target)
+disk: $(disk_image)
 
 $(iso_target): $(kernel_target) usr
 	@echo "[grub] building ISO kernel-$(ARCH).iso"
@@ -102,17 +103,20 @@ $(iso_target): $(kernel_target) usr
 	@grub-mkrescue -o $(iso_target) $(BUILD_DIR)/isofiles 2>&1 | sed -e "s/^/  | /g" || exit 1
 	@rm -r $(BUILD_DIR)/isofiles
 
-run: iso
+$(disk_image):
+	qemu-img create $@ 256M
+
+run: iso disk
 	qemu-system-i386 -d cpu_reset -no-reboot -cdrom $(iso_target) \
 		-hda $(disk_image) -boot order=dc -serial stdio
 
-run-interrupt: iso
+run-interrupt: iso disk
 	qemu-system-i386 -d int,cpu_reset -no-reboot -cdrom $(iso_target) \
 		-hda $(disk_image) -boot order=dc
 
 # When building gdb target disable optimizations (-N) and inlining (l) of Go code
 gdb: GC_FLAGS += -N -l
-gdb: iso
+gdb: iso disk
 	qemu-system-i386 -d int,cpu_reset -s -S -cdrom $(iso_target) \
 		-hda $(disk_image) -boot order=dc &
 	sleep 1
