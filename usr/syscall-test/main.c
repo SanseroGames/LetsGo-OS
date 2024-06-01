@@ -155,6 +155,10 @@ void main()
 	ret = execve("/this-program-does-not-exist", args, env_args);
 	printf(" execve2: %x (%d)\n", ret, errno);
 
+	// SYS_REBOOT
+	// Not tested in this executable as it interferes with other syscall tests
+	// use poweroff executable
+
 	// SYS_EXIT_GROUP
 	printf("Test exit group\n");
 	syscall(SYS_exit_group, 0);

@@ -281,8 +281,9 @@ func ResumeThread(t *thread) {
 func Schedule() {
 	if currentDomain == nil {
 		kerrorln("No Domains to schedule")
-		DisableInterrupts()
-		Hlt()
+		Shutdown()
+		// DisableInterrupts()
+		// Hlt()
 	}
 	//kdebug("Scheduling in ")
 	//printTid(defaultLogWriter, currentThread)

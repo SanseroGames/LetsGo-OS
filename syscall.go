@@ -150,6 +150,10 @@ const (
 
 	MMAP_MAP_FIXED     = 0x10
 	MMAP_MAP_ANONYMOUS = 0x20
+
+	REBOOT_MAGIC1       = 0xfee1dead
+	REBOOT_MAGIC2       = 0x28121969
+	REBOOT_CMD_POWEROFF = 0x4321fedc
 )
 
 var (
@@ -248,6 +252,7 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_EXECVE, "execve syscall", linuxExecveSyscall)
 	RegisterSyscall(syscall.SYS_MADVISE, "madvise syscall", okHandler)
 	RegisterSyscall(syscall.SYS_PRLIMIT64, "prlimit64 syscall", okHandler)
+	RegisterSyscall(syscall.SYS_REBOOT, "reboot syscall", rebootHandler)
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -294,7 +299,7 @@ func linuxSyscallHandler() {
 	}
 	handler := syscallList[handlerIdx-1]
 	if PRINT_SYSCALL {
-		kdebug("pid: ",
+		kdebugln("pid: ",
 			currentThread.domain.pid,
 			" tid: ",
 			currentThread.tid,
@@ -393,6 +398,21 @@ func linuxExitSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	PerformSchedule = true
 	// Already in new context so return value from last syscall from current domain
 	return currentThread.regs.EAX, ESUCCESS
+}
+
+func rebootHandler(args syscallArgs) (uint32, syscall.Errno) {
+	magic1 := args.arg1
+	magic2 := args.arg2
+	cmd := args.arg3
+	if magic1 != REBOOT_MAGIC1 && magic2 != REBOOT_MAGIC2 {
+		return 0, syscall.EINVAL
+	}
+	if cmd != REBOOT_CMD_POWEROFF {
+		kerrorln("invalid reboot command")
+		return 0, syscall.EINVAL
+	}
+	Shutdown()
+	return 0, syscall.EINVAL
 }
 
 func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
