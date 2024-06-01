@@ -241,7 +241,6 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_EPOLL_CREATE1, "epoll_create1 syscall", invalHandler)
 	RegisterSyscall(syscall.SYS_EPOLL_WAIT, "epoll wait syscall", okHandler)
 	RegisterSyscall(syscall.SYS_EPOLL_CREATE, "epoll_create syscall", linuxEpollCreateSyscall)
-	RegisterSyscall(syscall.SYS_WAIT4, "wait4 syscall", invalHandler)
 	RegisterSyscall(syscall.SYS_FCNTL64, "fcntl64 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_FCNTL, "fctnl syscall", okHandler)
 	RegisterSyscall(syscall.SYS_PRCTL, "prctl syscall", invalHandler)
@@ -253,6 +252,7 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_MADVISE, "madvise syscall", okHandler)
 	RegisterSyscall(syscall.SYS_PRLIMIT64, "prlimit64 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_REBOOT, "reboot syscall", rebootHandler)
+	RegisterSyscall(syscall.SYS_WAIT4, "wait4 syscall", linuxWaitPidSyscall)
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -379,6 +379,32 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	}
 	PerformSchedule = true
 	// return currentThread.regs.EAX, ESUCCESS
+	return newDomain.pid, ESUCCESS
+}
+
+func linuxWaitPidSyscall(args syscallArgs) (uint32, syscall.Errno) {
+	waitPid := args.arg1
+	// status := args.arg2
+	// options := args.arg3
+	// usage := args.arg3
+	// kdebugln("Wait for ", waitPid)
+
+	for {
+		Block()
+		notStarted := true
+		stillWaiting := false
+		for cur := allDomains.head; notStarted || cur != allDomains.head; cur = cur.next {
+			if cur.pid == waitPid {
+				stillWaiting = true
+				break
+			}
+			notStarted = false
+		}
+		if !stillWaiting {
+			break
+		}
+	}
+
 	return 0, ESUCCESS
 }
 

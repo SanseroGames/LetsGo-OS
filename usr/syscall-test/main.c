@@ -17,6 +17,7 @@
 #include <sys/uio.h>
 #include <sys/utsname.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 int clone_test_to_test_exit(void *ptr)
 {
@@ -158,6 +159,12 @@ void main()
 	// SYS_REBOOT
 	// Not tested in this executable as it interferes with other syscall tests
 	// use poweroff executable
+
+	// SYS_WAIT4
+	printf("Test wait\n");
+	ret = execve("/usr/wastetime", args, env_args);
+	waitpid(ret, NULL, 0);
+	printf("Wait completed\n");
 
 	// SYS_EXIT_GROUP
 	printf("Test exit group\n");
