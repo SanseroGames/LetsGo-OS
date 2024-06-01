@@ -27,6 +27,7 @@ const (
 	PAGE_FAULT_INSTRUCTION_FETCH = 1 << 4
 
 	MAX_ALLOC_VIRT_ADDR = 0xf0000000
+	MIN_ALLOC_VIRT_ADDR = 0x8000000
 )
 
 var (
@@ -126,16 +127,19 @@ func (m *MemSpace) MapPage(page uintptr, virtAddr uintptr, flags uint8) {
 
 func (m *MemSpace) UnmapPage(virtAddr uintptr) {
 	if PAGE_DEBUG {
-		kdebugln("[PAGE] Unmapping page ", virtAddr)
+		kdebug("[PAGE] Unmapping page ", virtAddr)
 	}
 	pt := m.getPageTable(virtAddr)
 	e := pt.getEntry(virtAddr)
 	if e.isPresent() {
 		e.unsetPresent()
 		FreePage(e.getPhysicalAddress())
+		if PAGE_DEBUG {
+			kdebugln("(phys-addr: ", e.getPhysicalAddress(), ")")
+		}
 	} else {
 		if PAGE_DEBUG {
-			kdebugln("[PAGE] WARNING: Page was already unmapped")
+			kdebugln("\n[PAGE] WARNING: Page was already unmapped")
 		}
 	}
 }
@@ -148,6 +152,12 @@ func (m *MemSpace) getPageTableEntry(virtAddr uintptr) *pageTableEntry {
 func (m *MemSpace) FindSpaceFor(startAddr uintptr, length uintptr) uintptr {
 	if PAGE_DEBUG {
 		kdebugln("[PAGE] Find space for ", startAddr, " with size ", length)
+	}
+	if startAddr < MIN_ALLOC_VIRT_ADDR {
+		if PAGE_DEBUG {
+			kdebugln("[PAGE] startAddr was below MIN_ALLOC_VIRT_ADDR")
+		}
+		startAddr = MIN_ALLOC_VIRT_ADDR
 	}
 	for startAddr < MAX_ALLOC_VIRT_ADDR {
 		// TODO: Check if page table is not allocated and count it as free instead of getting table entry and causing the table to be allocated

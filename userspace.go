@@ -192,6 +192,8 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 	elfHdr, loadAddr, topAddr, module := LoadElfFile(path, &outDomain.MemorySpace)
 
 	if elfHdr == nil || module == nil {
+		outDomain.MemorySpace.FreeAllPages()
+		// Assumption: LoadElfFile cannot fail if it started allocating pages
 		kerrorln("Could not load elf file")
 		return 2
 	}

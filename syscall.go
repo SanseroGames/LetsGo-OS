@@ -205,7 +205,6 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_READ, "read syscall", linuxReadSyscall)
 	RegisterSyscall(syscall.SYS_READLINK, "readlink syscall", okHandler)
 	RegisterSyscall(syscall.SYS_READLINKAT, "read link at syscall", invalHandler)
-	RegisterSyscall(syscall.SYS_FCNTL64, "fcntl64 syscall", invalHandler)
 	RegisterSyscall(syscall.SYS_SCHED_GETAFFINITY, "sched get affinity syscall", func(args syscallArgs) (uint32, syscall.Errno) { return 0xffffffff, ESUCCESS })
 	RegisterSyscall(syscall.SYS_NANOSLEEP, "nano sleep syscall", invalHandler)
 	RegisterSyscall(syscall.SYS_EXIT_GROUP, "exit group syscall", linuxExitGroupSyscall)
@@ -240,15 +239,16 @@ func InitSyscall() {
 	RegisterSyscall(0x182, "rseq syscall", invalHandler)
 	RegisterSyscall(0x193, "clock gettime 64 syscall", invalHandler)
 	RegisterSyscall(syscall.SYS_EPOLL_CREATE1, "epoll_create1 syscall", invalHandler)
-	RegisterSyscall(syscall.SYS_EPOLL_WAIT, "epoll wait syscall", func(args syscallArgs) (uint32, syscall.Errno) { return 0, ESUCCESS })
+	RegisterSyscall(syscall.SYS_EPOLL_WAIT, "epoll wait syscall", okHandler)
 	RegisterSyscall(syscall.SYS_EPOLL_CREATE, "epoll_create syscall", linuxEpollCreateSyscall)
 	RegisterSyscall(syscall.SYS_WAIT4, "wait4 syscall", invalHandler)
-	RegisterSyscall(syscall.SYS_FCNTL, "fctnl syscall", invalHandler)
+	RegisterSyscall(syscall.SYS_FCNTL64, "fcntl64 syscall", okHandler)
+	RegisterSyscall(syscall.SYS_FCNTL, "fctnl syscall", okHandler)
 	RegisterSyscall(syscall.SYS_PRCTL, "prctl syscall", invalHandler)
-	RegisterSyscall(syscall.SYS_PIPE2, "pipe2 syscall", func(args syscallArgs) (uint32, syscall.Errno) { return 0, ESUCCESS })
-	RegisterSyscall(syscall.SYS_EPOLL_CTL, "epoll_ctl syscall", func(args syscallArgs) (uint32, syscall.Errno) { return 0, ESUCCESS })
-	RegisterSyscall(syscall.SYS_DUP3, "dup3 syscall", func(args syscallArgs) (uint32, syscall.Errno) { return 0, ESUCCESS })
-	RegisterSyscall(syscall.SYS_DUP2, "dup2 syscall", func(args syscallArgs) (uint32, syscall.Errno) { return 0, ESUCCESS })
+	RegisterSyscall(syscall.SYS_PIPE2, "pipe2 syscall", okHandler)
+	RegisterSyscall(syscall.SYS_EPOLL_CTL, "epoll_ctl syscall", okHandler)
+	RegisterSyscall(syscall.SYS_DUP3, "dup3 syscall", okHandler)
+	RegisterSyscall(syscall.SYS_DUP2, "dup2 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_EXECVE, "execve syscall", linuxExecveSyscall)
 	RegisterSyscall(syscall.SYS_MADVISE, "madvise syscall", okHandler)
 	RegisterSyscall(syscall.SYS_PRLIMIT64, "prlimit64 syscall", okHandler)
@@ -378,7 +378,8 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		ExitThread(currentThread)
 	}
 	PerformSchedule = true
-	return currentThread.regs.EAX, ESUCCESS
+	// return currentThread.regs.EAX, ESUCCESS
+	return 0, ESUCCESS
 }
 
 func linuxEpollCreateSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -509,23 +510,26 @@ func linuxMunmapSyscall(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func linuxBrkSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	newBrk := args.arg1
-	brk := uint32(currentThread.domain.MemorySpace.Brk)
+	newBrk := uintptr(args.arg1)
+	brk := currentThread.domain.MemorySpace.Brk
 	if newBrk == 0 {
-		return brk, ESUCCESS
+		return uint32(brk), ESUCCESS
 	}
 	if newBrk == brk || newBrk < brk {
-		return brk, ESUCCESS
+		return uint32(brk), ESUCCESS
 	}
 	//text_mode_print_hex32(brk)
 	for i := (brk + PAGE_SIZE - 1) &^ (PAGE_SIZE - 1); i < newBrk; i += PAGE_SIZE {
 		p := AllocPage()
 		Memclr(p, PAGE_SIZE)
 		flags := uint8(PAGE_PERM_USER | PAGE_RW)
-		currentThread.domain.MemorySpace.MapPage(p, uintptr(i), flags)
+		// kdebugln("[brk] Map page ", i, " -> ", p)
+
+		currentThread.domain.MemorySpace.MapPage(p, i, flags)
 	}
-	currentThread.domain.MemorySpace.Brk = uintptr(newBrk)
-	return newBrk, ESUCCESS
+	currentThread.domain.MemorySpace.Brk = newBrk
+	// kdebugln("BRK: ", newBrk)
+	return uint32(newBrk), ESUCCESS
 }
 
 func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
