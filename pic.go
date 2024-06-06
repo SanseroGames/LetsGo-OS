@@ -64,6 +64,8 @@ func defaultPicHandler() {
 
 func InitPIC() {
 
+	picHandlerSlice := picHandlers[:]
+
 	Outb(PIC1Port, PIC_ICW1_Init|PIC_ICW1_ICW4)
 	Outb(PIC2Port, PIC_ICW1_Init|PIC_ICW1_ICW4)
 
@@ -84,7 +86,7 @@ func InitPIC() {
 	for i := 0; i < 8; i++ {
 		SetInterruptHandler(PIC2Offset+byte(i), PICInterruptHandler, KCS_SELECTOR, PRIV_USER)
 	}
-	for i := range picHandlers {
+	for i := range picHandlerSlice {
 		RegisterPICHandler(uint8(i), defaultPicHandler)
 	}
 }

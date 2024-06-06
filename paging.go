@@ -327,7 +327,10 @@ func CreateNewPageDirectory() MemSpace {
 
 func InitPaging() {
 	var topAddr uint64 = 0
-	for _, p := range memoryMaps {
+
+	memMapsSlice := memoryMaps[:]
+
+	for _, p := range memMapsSlice {
 		if p.Type != MEM_MAP_AVAILABLE || p.Length < PAGE_SIZE || p.BaseAddr+p.Length < KERNEL_RESERVED {
 			continue
 		}

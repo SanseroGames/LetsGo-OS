@@ -11,7 +11,7 @@ const (
 var (
 	multibootInfo *MultibootInfo
 
-	loadedModules [20]MultibootModule
+	loadedModules [30]MultibootModule
 
 	memoryMaps [6]MemoryMap
 )
@@ -76,6 +76,8 @@ func InitMultiboot(info *MultibootInfo) {
 
 	mbI := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(info), unsafe.Sizeof(*info))), info.TotalSize-uint32(unsafe.Sizeof(*info)))
 
+	loadedModuleSlice := loadedModules[:]
+
 	foundModules := 0
 	for i := uint32(0); i < info.TotalSize; {
 		mbTag := (*MultibootTag)(unsafe.Pointer(&mbI[i]))
@@ -84,13 +86,13 @@ func InitMultiboot(info *MultibootInfo) {
 			break
 		}
 		if mbTag.Type == 3 {
-			if foundModules < len(loadedModules) {
+			if foundModules < len(loadedModuleSlice) {
 				mbMod := (*MultibootModule)(unsafe.Pointer(mbTag))
 
-				loadedModules[foundModules] = *mbMod
+				loadedModuleSlice[foundModules] = *mbMod
 				kdebugln(mbMod.Cmdline())
-				kdebugln(loadedModules[foundModules].Cmdline())
-				kdebugln(uintptr(loadedModules[foundModules].Start), " ", uintptr(loadedModules[foundModules].End), " ", loadedModules[foundModules].Size, " ", loadedModules[foundModules].cmdline[0])
+				kdebugln(loadedModuleSlice[foundModules].Cmdline())
+				kdebugln(uintptr(loadedModuleSlice[foundModules].Start), " ", uintptr(loadedModuleSlice[foundModules].End), " ", loadedModuleSlice[foundModules].Size, " ", loadedModuleSlice[foundModules].cmdline[0])
 				foundModules++
 			} else {
 				kerrorln("[WARNING] Not enough space to load all modules")

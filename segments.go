@@ -130,6 +130,8 @@ func getGDT() *GdtDescriptor
 func InitSegments() {
 	var gdtEntry GdtEntry
 
+	gdtTableSlice := gdtTable[:]
+
 	Memclr(uintptr(unsafe.Pointer(&gdtTable)), len(gdtTable))
 
 	gdtDescriptor = *getGDT()
@@ -137,7 +139,7 @@ func InitSegments() {
 		uint32(gdtDescriptor.GdtAddressHigh)<<16)
 	oldGdtLen := int(uintptr(gdtDescriptor.GdtSize+1) / unsafe.Sizeof(gdtEntry))
 	oldGdt := unsafe.Slice((*GdtEntry)(unsafe.Pointer(oldGdtAddr)), oldGdtLen)
-	copy(gdtTable[:], oldGdt)
+	copy(gdtTableSlice, oldGdt)
 	gdtAddr := uintptr(unsafe.Pointer(&gdtTable))
 	gdtDescriptor.GdtAddressLow = uint16(gdtAddr)
 	gdtDescriptor.GdtAddressHigh = uint16(gdtAddr >> 16)

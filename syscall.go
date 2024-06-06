@@ -253,6 +253,8 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_PRLIMIT64, "prlimit64 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_REBOOT, "reboot syscall", rebootHandler)
 	RegisterSyscall(syscall.SYS_WAIT4, "wait4 syscall", linuxWaitPidSyscall)
+	RegisterSyscall(syscall.SYS_FSTATAT64, "fstatat64 syscall", okHandler)
+	RegisterSyscall(syscall.SYS_GETCWD, "fstatat64 syscall", okHandler)
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {

@@ -214,7 +214,8 @@ func defaultHandler() {
 
 func InitInterrupts() {
 	isrBaseAddr := reflect.ValueOf(isrEntryList).Pointer()
-	for i := range idtTable {
+	idtTableSlice := idtTable[:]
+	for i := range idtTableSlice {
 		if i == 2 || i == 15 {
 			continue
 		}
@@ -222,11 +223,11 @@ func InitInterrupts() {
 		isrAddr := isrBaseAddr + uintptr(i*23)
 		low := uint16(isrAddr)
 		high := uint16(uint32(isrAddr) >> 16)
-		idtTable[i].offsetLow = low
-		idtTable[i].offsetHigh = high
+		idtTableSlice[i].offsetLow = low
+		idtTableSlice[i].offsetHigh = high
 		SetInterruptHandler(uint8(i), defaultHandler, KCS_SELECTOR, PRIV_KERNEL)
 	}
-	idtDescriptor.IdtSize = uint16(uintptr(len(idtTable))*unsafe.Sizeof(idtTable[0])) - 1
+	idtDescriptor.IdtSize = uint16(uintptr(len(idtTableSlice))*unsafe.Sizeof(idtTableSlice[0])) - 1
 	idtAddr := uint32(uintptr(unsafe.Pointer(&idtTable)))
 	idtDescriptor.IdtAddressLow = uint16(idtAddr)
 	idtDescriptor.IdtAddressHigh = uint16(idtAddr >> 16)
