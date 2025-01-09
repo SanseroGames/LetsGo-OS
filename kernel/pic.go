@@ -1,4 +1,4 @@
-package main
+package kernel
 
 const (
 	PIC_PRINT_DEBUG = ENABLE_DEBUG

@@ -1,4 +1,4 @@
-package main
+package kernel
 
 import (
 	"io"
@@ -22,8 +22,6 @@ var progs = [...]string{
 
 var domains [len(progs)]*domain
 var threads [len(progs)]*thread
-
-func main()
 
 const ENABLE_DEBUG = false
 

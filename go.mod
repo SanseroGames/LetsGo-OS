@@ -1,3 +1,3 @@
-module localhost/letsgo-os
+module github.com/sanserogames/letsgo-os
 
 go 1.21

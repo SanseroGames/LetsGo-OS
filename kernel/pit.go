@@ -1,4 +1,4 @@
-package main
+package kernel
 
 const (
 	PIT_PORT_DATA    = 0x40

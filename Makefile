@@ -75,7 +75,7 @@ go.o:
 	@# build/go.o is a elf32 object file but all Go symbols are unexported. Our
 	@# asm entrypoint code needs to know the address to 'main.main' and 'runtime.g0'
 	@# so we use objcopy to globalize them
-	@GOARCH=$(GOARCH) GOOS=$(GOOS) go build -ldflags='-buildmode=c-archive' -o $(BUILD_DIR)/go.o
+	@GOARCH=$(GOARCH) GOOS=$(GOOS) go build -o $(BUILD_DIR)/go.o -ldflags='-buildmode=c-archive' github.com/sanserogames/letsgo-os/kernel/main
 	@echo "[objcopy] globalizing symbols {runtime.g0, main.main} in go.o"
 	@objcopy \
                 --globalize-symbol runtime.g0 \

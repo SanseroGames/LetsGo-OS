@@ -1,0 +1,1 @@
+// This file is empty to allow for the missing body of the main function

@@ -1,4 +1,4 @@
-package main
+package kernel
 
 func Inb(port uint16) uint8
 func Inw(port uint16) uint16

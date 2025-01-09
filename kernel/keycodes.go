@@ -1,4 +1,4 @@
-package main
+package kernel
 
 var KeycodeTranslation = map[int]uint8{
 	0:    42,

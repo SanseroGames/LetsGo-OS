@@ -1,4 +1,4 @@
-package main
+package kernel
 
 func Shutdown() {
 	kdebugln("Shutting down...")

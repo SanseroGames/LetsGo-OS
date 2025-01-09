@@ -44,7 +44,7 @@ TEXT doScheduleStack(SB),NOSPLIT,$0
     JL already_in_schedule_stack
 
 normal:
-    MOVL main·currentThread(SB), AX
+    MOVL ·currentThread(SB), AX
 
     MOVL SP, (thread_kernelInfo+InterruptInfo_ESP)(AX)
     MOVL $scheduleStackReturn(SB), (thread_kernelInfo+InterruptInfo_EIP)(AX)
@@ -56,7 +56,7 @@ normal:
     MOVL 0(DI), DI
     CALL DI
 
-    MOVL main·currentThread(SB), AX
+    MOVL ·currentThread(SB), AX
     MOVL (thread_kernelInfo+InterruptInfo_ESP)(AX), SP
     MOVL (thread_kernelInfo+InterruptInfo_EIP)(AX), DI
     MOVL $·doubleStackReturn(SB), (thread_kernelInfo+InterruptInfo_EIP)(AX)

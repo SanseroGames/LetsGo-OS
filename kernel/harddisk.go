@@ -1,4 +1,4 @@
-package main
+package kernel
 
 import "syscall"
 

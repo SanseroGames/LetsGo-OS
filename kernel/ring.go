@@ -1,4 +1,4 @@
-package main
+package kernel
 
 // I don't know how to make this datastructure generic
 // After a lot of experimenting I made more or less generic structure that handles

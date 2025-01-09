@@ -1,4 +1,4 @@
-package main
+package kernel
 
 type Keystate struct {
 	Keycode uint8
