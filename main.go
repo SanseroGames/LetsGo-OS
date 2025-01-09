@@ -14,10 +14,10 @@ var progs = [...]string{
 	// "/usr/hellorust",
 	// "/usr/readtest",
 	// "/usr/rustread",
-	// "/usr/shell",
+	"/usr/shell",
 	// "/usr/statx",
 
-	"/usr/syscall-test",
+	// "/usr/syscall-test",
 }
 
 var domains [len(progs)]*domain
