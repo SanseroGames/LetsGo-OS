@@ -1,5 +1,7 @@
 package main
 
+import "syscall"
+
 type AtaDrive struct {
 	IOBase         uint16
 	ControlBase    uint16
@@ -235,20 +237,24 @@ func (d *AtaDrive) WriteSectors(address int, buffer []byte) {
 	}
 }
 
-func (d *AtaDrive) ReadSectors(address int, count uint8, buffer []byte) {
+func (d *AtaDrive) ReadSectors(address int, count uint8, buffer []byte) syscall.Errno {
 	if !d.Initialized {
-		return
+		return syscall.EINVAL
 	}
 	if int(count)*512 > len(buffer) {
-		return
+		return syscall.EINVAL
 	}
 	for i := 0; i < int(count); i++ {
-		d.workSectors(address, 1, buffer[i*512:(i+1)*512], false)
+		err := d.workSectors(address, 1, buffer[i*512:(i+1)*512], false)
+		if err != ESUCCESS {
+			return err
+		}
 	}
+	return ESUCCESS
 }
 
 // Assumes disk is initialized
-func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bool) {
+func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bool) syscall.Errno {
 	driveSelect := 0xE0
 	if d.IsSlave {
 		driveSelect = 0xF0
@@ -272,7 +278,7 @@ func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bo
 		if i > 1000 {
 			kerrorln("Timeout trying to read disk", s)
 			d.Reset()
-			return
+			return syscall.EAGAIN
 		}
 		if i > 4 && s&0x21 != 0 {
 			hasError = true
@@ -285,7 +291,7 @@ func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bo
 	}
 	if hasError {
 		kerrorln("Error while trying to execute disk command")
-		return
+		return syscall.EFAULT // TODO: Not correct
 	}
 	offset := 0
 	for n := 0; n < int(count); n++ {
@@ -324,6 +330,7 @@ func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bo
 	// TODO: AAAA I don't know why this is happening!!!!
 	//d.Reset()
 	//}
+	return ESUCCESS
 }
 
 var firstDrive AtaDrive = AtaDrive{
