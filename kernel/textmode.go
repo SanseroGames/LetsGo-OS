@@ -4,19 +4,19 @@ import (
 	"unsafe"
 )
 
-type text_mode_writer struct {
+type TextModeWriter struct {
 }
 
-func (e text_mode_writer) Write(p []byte) (int, error) {
-	text_mode_print_bytes(p)
+func (e TextModeWriter) Write(p []byte) (int, error) {
+	textModePrintBytes(p)
 	return len(p), nil
 }
 
-type text_mode_error_writer struct {
+type TextModeErrorWriter struct {
 }
 
-func (e text_mode_error_writer) Write(p []byte) (int, error) {
-	text_mode_print_error_bytes(p)
+func (e TextModeErrorWriter) Write(p []byte) (int, error) {
+	textModePrintErrorBytes(p)
 	return len(p), nil
 }
 
@@ -35,19 +35,19 @@ var (
 
 var fb []uint16
 
-func text_mode_init() {
+func TextModeInit() {
 	fb = unsafe.Slice((*uint16)(unsafe.Pointer(fbPhysAddr)), fbWidth*fbHeight)
 	//text_mode_enable_cursor()
 	//text_mode_update_cursor(0,0)
 }
 
-func text_mode_flush_screen() {
+func TextModeFlushScreen() {
 	for i := range fb {
 		fb[i] = 0xf00
 	}
 }
 
-func text_mode_check_fb_move() {
+func textModeCheckFbMove() {
 	for fbCurLine >= fbHeight {
 		copy(fb[:len(fb)-fbWidth], fb[fbWidth:])
 		//for i := 1; i<fbHeight; i++{
@@ -60,35 +60,35 @@ func text_mode_check_fb_move() {
 	}
 }
 
-func text_mode_println_col(s string, attr uint8) {
+func textModePrintLnCol(s string, attr uint8) {
 	for _, b := range s {
-		text_mode_print_char_col(uint8(b), attr)
+		textModePrintCharCol(uint8(b), attr)
 	}
-	text_mode_print_char(0xa)
+	textModePrintChar(0xa)
 }
 
-func text_mode_print_bytes(a []byte) {
+func textModePrintBytes(a []byte) {
 	for _, b := range a {
-		text_mode_print_char(uint8(b))
+		textModePrintChar(uint8(b))
 	}
 }
 
-func text_mode_print_error_bytes(a []byte) {
+func textModePrintErrorBytes(a []byte) {
 	for _, b := range a {
-		text_mode_print_char_col(uint8(b), 4<<4|0xf)
+		textModePrintCharCol(uint8(b), 4<<4|0xf)
 	}
 }
 
-func text_mode_print_char(char uint8) {
-	text_mode_print_char_col(char, 0<<4|0xf)
+func textModePrintChar(char uint8) {
+	textModePrintCharCol(char, 0<<4|0xf)
 }
 
-func text_mode_print_char_col(char uint8, attr uint8) {
-	text_mode_check_fb_move()
+func textModePrintCharCol(char uint8, attr uint8) {
+	textModeCheckFbMove()
 	if char == '\n' {
 		fbCurLine++
 		fbCurCol = 0
-		text_mode_check_fb_move()
+		textModeCheckFbMove()
 	} else if char == '\b' {
 		fb[fbCurCol+fbCurLine*fbWidth] = 0xf00
 		fbCurCol = fbCurCol - 1

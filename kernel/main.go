@@ -26,8 +26,8 @@ var domains [len(progs)]*domain
 var threads [len(progs)]*thread
 
 var debugWriters = []io.Writer{&serialDevice}
-var errorWriters = []io.Writer{&serialDevice, text_mode_error_writer{}}
-var logWriters = []io.Writer{&serialDevice, text_mode_writer{}}
+var errorWriters = []io.Writer{&serialDevice, TextModeErrorWriter{}}
+var logWriters = []io.Writer{&serialDevice, TextModeWriter{}}
 
 const ENABLE_DEBUG = false
 
@@ -36,13 +36,13 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 	if stackstart <= stackend {
 		kernelPanic("No stack")
 	}
-	text_mode_init()
+	TextModeInit()
 	InitSerialDevice()
 	log.SetDefaultDebugLogWriters(debugWriters[:])
 	log.SetDefaultErrorLogWriters(errorWriters[:])
 	log.SetDefaultLogWriters(logWriters[:])
 
-	text_mode_flush_screen()
+	TextModeFlushScreen()
 	s := "Hi and welcome to Let's-Go OS"
 	s2 := "An Operating System written in the GO programming language"
 	s3 := "It can't do much, but I hope you enjoy your stay"
@@ -75,7 +75,7 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 
 	InitUserMode(stackstart, stackend)
 
-	text_mode_println_col("Initilaization complete", 0x2)
+	textModePrintLnCol("Initilaization complete", 0x2)
 	log.KDebugLn("Initialization complete")
 	//HdReadSector()
 
