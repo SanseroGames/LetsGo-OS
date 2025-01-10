@@ -1,6 +1,10 @@
 package kernel
 
-import "syscall"
+import (
+	"syscall"
+
+	"github.com/sanserogames/letsgo-os/kernel/log"
+)
 
 type AtaDrive struct {
 	IOBase         uint16
@@ -71,14 +75,14 @@ func (i *AtaIdentify) printInfos() {
 }
 
 func printInfoHelper(name string, data []uint8) {
-	kdebug(name, ": ")
+	log.KDebug(name, ": ")
 	for c, i := range data {
-		kdebug(i, " ")
+		log.KDebug(i, " ")
 		if c%22 == 21 && c > 0 {
-			kdebugln("")
+			log.KDebugLn("")
 		}
 	}
-	kdebugln("")
+	log.KDebugLn("")
 }
 
 const (
@@ -149,7 +153,7 @@ func (d *AtaDrive) Initialize() {
 		/* Nothing there */
 		return
 	} else {
-		kerrorln("Unknown device type")
+		log.KErrorLn("Unknown device type")
 		return
 	}
 
@@ -212,7 +216,7 @@ func (d *AtaDrive) Reset() bool {
 		d.delay()
 	}
 	if t == 0 {
-		kerrorln("Timeout resetting drive")
+		log.KErrorLn("Timeout resetting drive")
 		return false
 	}
 	return true
@@ -220,7 +224,7 @@ func (d *AtaDrive) Reset() bool {
 
 // TODO: Explicit length?
 func (d *AtaDrive) WriteSectors(address int, buffer []byte) {
-	kerrorln("Write does not work :(")
+	log.KErrorLn("Write does not work :(")
 	return
 	if !d.Initialized {
 		return
@@ -231,7 +235,7 @@ func (d *AtaDrive) WriteSectors(address int, buffer []byte) {
 	}
 	count := len(buffer) / 512
 	// TODO: This is dangerous
-	kdebug("Writing ", uintptr(count), " sectors")
+	log.KDebug("Writing ", uintptr(count), " sectors")
 	for i := 0; i < count; i++ {
 		d.workSectors(address+i, 1, buffer, true)
 	}
@@ -276,7 +280,7 @@ func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bo
 	for {
 		s := Inb(d.IOBase + ataStatusRegister)
 		if i > 1000 {
-			kerrorln("Timeout trying to read disk", s)
+			log.KErrorLn("Timeout trying to read disk", s)
 			d.Reset()
 			return syscall.EAGAIN
 		}
@@ -290,7 +294,7 @@ func (d *AtaDrive) workSectors(address int, count uint8, buffer []byte, write bo
 		i++
 	}
 	if hasError {
-		kerrorln("Error while trying to execute disk command")
+		log.KErrorLn("Error while trying to execute disk command")
 		return syscall.EFAULT // TODO: Not correct
 	}
 	offset := 0
@@ -363,40 +367,40 @@ func testReadAndWrite() {
 		hdBuf[i] = byte(i % 256)
 	}
 	copy(hdBuf2[:], hdBuf[:])
-	kdebugln("Writing Data")
+	log.KDebugLn("Writing Data")
 	//firstDrive.WriteSectors(0, hdBuf[:512])
 	//firstDrive.WriteSectors(1, hdBuf[512:])
 	for i := range hdBuf {
 		hdBuf[i] = 0x42
 	}
-	kdebugln("Reading Data")
+	log.KDebugLn("Reading Data")
 	firstDrive.ReadSectors(0, 1, hdBuf[:512])
 	firstDrive.ReadSectors(1, 1, hdBuf[512:])
 	//firstDrive.ReadSectors(0, 2, hdBuf[:])
 	for c := range hdBuf {
-		kdebug(uintptr(hdBuf[c]), " ")
+		log.KDebug(uintptr(hdBuf[c]), " ")
 		if c%512 == 511 && c > 0 {
-			kdebugln("")
+			log.KDebugLn("")
 		}
 	}
-	kdebugln("")
+	log.KDebugLn("")
 	for c := range hdBuf2 {
-		kdebug(hdBuf2[c], " ")
+		log.KDebug(hdBuf2[c], " ")
 		if c%512 == 511 && c > 0 {
-			kdebugln("")
+			log.KDebugLn("")
 		}
 	}
-	kdebugln("")
+	log.KDebugLn("")
 	noMatch := false
 	for i := range hdBuf2 {
 		if hdBuf[i] != hdBuf2[i] {
-			kerrorln("Buffers don't match!!!", uintptr(i))
+			log.KErrorLn("Buffers don't match!!!", uintptr(i))
 			noMatch = true
 			break
 		}
 	}
 	if !noMatch {
-		kdebugln("Buffers match")
+		log.KDebugLn("Buffers match")
 	}
 
 }

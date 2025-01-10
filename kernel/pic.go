@@ -1,5 +1,9 @@
 package kernel
 
+import (
+	"github.com/sanserogames/letsgo-os/kernel/log"
+)
+
 const (
 	PIC_PRINT_DEBUG = ENABLE_DEBUG
 
@@ -48,7 +52,7 @@ func PICInterruptHandler() {
 	}
 
 	if PIC_PRINT_DEBUG && irq != 0 {
-		kdebugln("[PIC] Handler nr ", irq)
+		log.KDebugLn("[PIC] Handler nr ", irq)
 	}
 	picHandlers[irq]()
 
@@ -59,7 +63,7 @@ func PICInterruptHandler() {
 }
 
 func defaultPicHandler() {
-	kerrorln("Unhandled IRQ")
+	log.KErrorLn("Unhandled IRQ")
 }
 
 func InitPIC() {

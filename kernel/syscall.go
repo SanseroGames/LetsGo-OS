@@ -3,6 +3,8 @@ package kernel
 import (
 	"syscall"
 	"unsafe"
+
+	"github.com/sanserogames/letsgo-os/kernel/log"
 )
 
 const PRINT_SYSCALL = ENABLE_DEBUG
@@ -291,7 +293,7 @@ func linuxSyscallHandler() {
 			// Write syscall. We probably upset the go runtime so it wants to complain
 			linuxWriteSyscall(args)
 		}
-		kprintln("\nkernel syscallnr: ", syscallNr)
+		log.KPrintLn("\nkernel syscallnr: ", syscallNr)
 		kernelPanic("Why is the kernel making a syscall?")
 	}
 	handlerIdx := registeredSyscalls[syscallNr]
@@ -301,7 +303,7 @@ func linuxSyscallHandler() {
 	}
 	handler := syscallList[handlerIdx-1]
 	if PRINT_SYSCALL {
-		kdebugln("pid: ",
+		log.KDebugLn("pid: ",
 			currentThread.domain.pid,
 			" tid: ",
 			currentThread.tid,
@@ -313,7 +315,7 @@ func linuxSyscallHandler() {
 			uintptr(syscallNr),
 			")",
 			")")
-		kdebugln(" |- arg1:",
+		log.KDebugLn(" |- arg1:",
 			uintptr(args.arg1),
 			", arg2:",
 			uintptr(args.arg2),
@@ -329,7 +331,7 @@ func linuxSyscallHandler() {
 	}
 	ret, err = handler.handler(args)
 	if PRINT_SYSCALL {
-		kdebugln("SYSCALL RETURN pid: ",
+		log.KDebugLn("SYSCALL RETURN pid: ",
 			currentThread.domain.pid,
 			" tid: ",
 			currentThread.tid,
@@ -350,7 +352,7 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	arr := args.arg1
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(arr))
 	if !ok {
-		kerrorln("Could not look up string pathname")
+		log.KErrorLn("Could not look up string pathname")
 		return 0, syscall.EFAULT
 	}
 	pathname := cstring(addr)
@@ -389,7 +391,7 @@ func linuxWaitPidSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	// status := args.arg2
 	// options := args.arg3
 	// usage := args.arg3
-	// kdebugln("Wait for ", waitPid)
+	// log.KDebugln("Wait for ", waitPid)
 
 	for {
 		Block()
@@ -437,7 +439,7 @@ func rebootHandler(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EINVAL
 	}
 	if cmd != REBOOT_CMD_POWEROFF {
-		kerrorln("invalid reboot command")
+		log.KErrorLn("invalid reboot command")
 		return 0, syscall.EINVAL
 	}
 	Shutdown()
@@ -452,7 +454,7 @@ func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	buf := args.arg5
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
 	if !ok {
-		kerrorln("invalid adress in statx")
+		log.KErrorLn("invalid adress in statx")
 		return 0, syscall.EFAULT
 	}
 	item := (*statxData)(unsafe.Pointer(addr))
@@ -480,7 +482,7 @@ func linuxUnameSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	buf := args.arg1
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
 	if !ok {
-		kerrorln("invalid adress in uname")
+		log.KErrorLn("invalid adress in uname")
 		return 0, syscall.EFAULT
 	}
 	provided := (*utsname)(unsafe.Pointer(addr))
@@ -498,7 +500,7 @@ func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	currentThread.domain.MemorySpace.MapPage(newThreadMem, newThreadMem, PAGE_RW|PAGE_PERM_KERNEL)
 	if flags&_CLONE_THREAD == 0 {
 		// This is probably temporary as I don't want to implement COW right now to create a new process
-		kdebugln("[CLONE SYSCALL] Clone where the goal is not a thread does not behave like on linux")
+		log.KDebugLn("[CLONE SYSCALL] Clone where the goal is not a thread does not behave like on linux")
 		newThread.isFork = true
 	}
 	// Need to make this better at some point
@@ -511,7 +513,7 @@ func linuxMincoreSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	vec := args.arg3
 	vecAddr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(vec))
 	if !ok {
-		kerrorln("Could not look up vec array")
+		log.KErrorLn("Could not look up vec array")
 		return 0, syscall.EFAULT
 	}
 
@@ -551,12 +553,12 @@ func linuxBrkSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		p := AllocPage()
 		Memclr(p, PAGE_SIZE)
 		flags := uint8(PAGE_PERM_USER | PAGE_RW)
-		// kdebugln("[brk] Map page ", i, " -> ", p)
+		// log.KDebugln("[brk] Map page ", i, " -> ", p)
 
 		currentThread.domain.MemorySpace.MapPage(p, i, flags)
 	}
 	currentThread.domain.MemorySpace.Brk = newBrk
-	// kdebugln("BRK: ", newBrk)
+	// log.KDebugln("BRK: ", newBrk)
 	return uint32(newBrk), ESUCCESS
 }
 
@@ -616,12 +618,12 @@ func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	u_info := args.arg1
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(u_info))
 	if !ok {
-		kerrorln("Could not look up user desc")
+		log.KErrorLn("Could not look up user desc")
 		return 0, syscall.EFAULT
 	}
 	desc := (*UserDesc)(unsafe.Pointer(addr))
 	if desc.Flags&UDESC_SEG_NOT_PRESENT != 0 {
-		kerrorln("fixme: not handling updating entries")
+		log.KErrorLn("fixme: not handling updating entries")
 		return 0, syscall.ENOSYS
 	}
 
@@ -654,7 +656,7 @@ func linuxOpenSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	}
 	s := cstring(addr)
 	if PRINT_SYSCALL {
-		kdebugln("[SYS-OPEN] ", s)
+		log.KDebugLn("[SYS-OPEN] ", s)
 	}
 	//text_mode_println(s)
 	return 0, syscall.ENOSYS
@@ -672,9 +674,9 @@ func linuxOpenAtSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	}
 	s1 := cstring(pathaddr)
 	if PRINT_SYSCALL {
-		kdebugln("[SYS-OPENAT] fd:", fd)
-		kdebugln("[SYS-OPENAT] path:", s1)
-		kdebugln("[SYS-OPENAT] flags:", flags)
+		log.KDebugLn("[SYS-OPENAT] fd:", fd)
+		log.KDebugLn("[SYS-OPENAT] path:", s1)
+		log.KDebugLn("[SYS-OPENAT] flags:", flags)
 	}
 
 	if s1 == "/dev/null" {
@@ -701,7 +703,7 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(arr)
 	if !ok {
-		kerrorln("Could not look up string addr")
+		log.KErrorLn("Could not look up string addr")
 		return 0, syscall.EFAULT
 	}
 	iovecs := unsafe.Slice((*ioVec)(unsafe.Pointer(addr)), count)
@@ -716,9 +718,9 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		}
 		s := unsafe.String((*byte)(unsafe.Pointer(uintptr(addr))), n.iovLen)
 		if fd == 2 {
-			kerror(s)
+			log.KError(s)
 		} else {
-			kprint(s)
+			log.KPrint(s)
 		}
 		printed += len(s)
 	}
@@ -730,7 +732,7 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	text := uintptr(args.arg2)
 	length := args.arg3
 	if PRINT_SYSCALL {
-		kdebugln("FD: ", fd, " text: ", text, " length: ", length)
+		log.KDebugLn("FD: ", fd, " text: ", text, " length: ", length)
 	}
 	if fd < 1 || fd > 2 {
 		return 0, syscall.EBADF
@@ -742,15 +744,15 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(text)
 	if !ok {
-		kerrorln("Could not look up string addr")
+		log.KErrorLn("Could not look up string addr")
 		return 0, syscall.EFAULT
 	}
 	s := unsafe.String((*byte)(unsafe.Pointer(addr)), length)
 
 	if fd == 2 {
-		kerror(s)
+		log.KError(s)
 	} else {
-		kprint(s)
+		log.KPrint(s)
 	}
 	return uint32(len(s)), ESUCCESS //TODO: nr of bytes written
 }
@@ -761,7 +763,7 @@ func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	count := args.arg3
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
 	if !ok {
-		kerrorln("Could not look up read addr")
+		log.KErrorLn("Could not look up read addr")
 		return 0, syscall.EFAULT
 	}
 	arr := (*[1 << 30]byte)(unsafe.Pointer(addr))[:count]
@@ -807,20 +809,20 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	timeout := args.arg4
 
 	if futex_op&FUTEX_PRIVATE_FLAG == 0 {
-		kerrorln("Futex on shared futexes is not supported")
+		log.KErrorLn("Futex on shared futexes is not supported")
 		return 0, syscall.ENOSYS
 	}
 
 	addr, ok := currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(uaddr))
 	if !ok {
-		kerrorln("Could not look up read addr")
+		log.KErrorLn("Could not look up read addr")
 		return 0, syscall.EFAULT
 	}
 	futexAddr := (*uint32)(unsafe.Pointer(addr))
 	switch futex_op & 0xf {
 	case FUTEX_WAIT:
 		if timeout != 0 {
-			//kerrorln("Timeouts are not supported yet")
+			//log.KErrorln("Timeouts are not supported yet")
 			return 0, ESUCCESS //syscall.ENOSYS
 		}
 		// This should be atomically
@@ -844,7 +846,7 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		}
 		return woken, ESUCCESS
 	default:
-		kerrorln("Unsupported futex op", futex_op)
+		log.KErrorLn("Unsupported futex op", futex_op)
 		return 0, syscall.ENOSYS
 	}
 }
@@ -855,7 +857,7 @@ func linuxSchedYieldSyscall(rgs syscallArgs) (uint32, syscall.Errno) {
 }
 
 func unsupportedSyscall() {
-	kerrorln("\nUnsupported Linux syscall received! Disabling interrupts and halting")
-	kprintln("Syscall Number: ", uintptr(currentThread.regs.EAX), " (", uint32(currentThread.regs.EAX), ")")
+	log.KErrorLn("\nUnsupported Linux syscall received! Disabling interrupts and halting")
+	log.KPrintLn("Syscall Number: ", uintptr(currentThread.regs.EAX), " (", uint32(currentThread.regs.EAX), ")")
 	panicHelper(currentThread)
 }

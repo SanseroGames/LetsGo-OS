@@ -3,6 +3,8 @@ package kernel
 import (
 	"runtime"
 	"unsafe"
+
+	"github.com/sanserogames/letsgo-os/kernel/log"
 )
 
 type _func struct {
@@ -128,7 +130,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
 	outThread.fpOffset = 0xffffffff
 	kernelStack := AllocPage()
 	if ENABLE_DEBUG {
-		kdebugln("thread stack ", kernelStack)
+		log.KDebugLn("thread stack ", kernelStack)
 	}
 
 	Memclr(kernelStack, PAGE_SIZE)
@@ -183,7 +185,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
 // Need pointer as this function should not do any memory allocations
 func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 	if outDomain == nil || outMainThread == nil {
-		kerrorln("Cannot start program. Please allocate the memory for me")
+		log.KErrorLn("Cannot start program. Please allocate the memory for me")
 		return 1
 	}
 	outDomain.Segments = defaultUserSegments
@@ -194,7 +196,7 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 	if elfHdr == nil || module == nil {
 		outDomain.MemorySpace.FreeAllPages()
 		// Assumption: LoadElfFile cannot fail if it started allocating pages
-		kerrorln("Could not load elf file")
+		log.KErrorLn("Could not load elf file")
 		return 2
 	}
 	outDomain.programName = module.Cmdline()

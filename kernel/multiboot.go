@@ -2,6 +2,8 @@ package kernel
 
 import (
 	"unsafe"
+
+	"github.com/sanserogames/letsgo-os/kernel/log"
 )
 
 const (
@@ -81,7 +83,7 @@ func InitMultiboot(info *MultibootInfo) {
 	foundModules := 0
 	for i := uint32(0); i < info.TotalSize; {
 		mbTag := (*MultibootTag)(unsafe.Pointer(&mbI[i]))
-		kdebugln("Type ", mbTag.Type, " size ", mbTag.Size, " i ", i, " next ", (i+mbTag.Size+7)&0xfffffff8)
+		log.KDebugLn("Type ", mbTag.Type, " size ", mbTag.Size, " i ", i, " next ", (i+mbTag.Size+7)&0xfffffff8)
 		if mbTag.Type == 0 && mbTag.Size == 8 {
 			break
 		}
@@ -90,12 +92,12 @@ func InitMultiboot(info *MultibootInfo) {
 				mbMod := (*MultibootModule)(unsafe.Pointer(mbTag))
 
 				loadedModuleSlice[foundModules] = *mbMod
-				kdebugln(mbMod.Cmdline())
-				kdebugln(loadedModuleSlice[foundModules].Cmdline())
-				kdebugln(uintptr(loadedModuleSlice[foundModules].Start), " ", uintptr(loadedModuleSlice[foundModules].End), " ", loadedModuleSlice[foundModules].Size, " ", loadedModuleSlice[foundModules].cmdline[0])
+				log.KDebugLn(mbMod.Cmdline())
+				log.KDebugLn(loadedModuleSlice[foundModules].Cmdline())
+				log.KDebugLn(uintptr(loadedModuleSlice[foundModules].Start), " ", uintptr(loadedModuleSlice[foundModules].End), " ", loadedModuleSlice[foundModules].Size, " ", loadedModuleSlice[foundModules].cmdline[0])
 				foundModules++
 			} else {
-				kerrorln("[WARNING] Not enough space to load all modules")
+				log.KErrorLn("[WARNING] Not enough space to load all modules")
 			}
 		}
 		if mbTag.Type == 6 {
@@ -104,10 +106,10 @@ func InitMultiboot(info *MultibootInfo) {
 			maps := unsafe.Slice(&(memTag.Entries), nrentries)
 			for i, v := range maps {
 				if i > len(memoryMaps) {
-					kerrorln("[WARNING] More memory maps than space in memorymap list")
+					log.KErrorLn("[WARNING] More memory maps than space in memorymap list")
 					break
 				}
-				// kdebugln(uintptr(v.BaseAddr), " ", uintptr(v.Length), " ", v.Type)
+				// log.KDebugln(uintptr(v.BaseAddr), " ", uintptr(v.Length), " ", v.Type)
 				memoryMaps[i] = v
 			}
 		}
@@ -115,10 +117,10 @@ func InitMultiboot(info *MultibootInfo) {
 		size := max(mbTag.Size, 8)
 		i = (i + size + 7) & 0xfffffff8
 		if oldi == i {
-			kerrorln("[WARNING] Loading multiboot modules behaved weird")
+			log.KErrorLn("[WARNING] Loading multiboot modules behaved weird")
 			break
 		}
 	}
-	kdebugln("Done")
+	log.KDebugLn("Done")
 	//printMemMaps()
 }

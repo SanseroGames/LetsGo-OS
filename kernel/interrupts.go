@@ -3,6 +3,8 @@ package kernel
 import (
 	"reflect"
 	"unsafe"
+
+	"github.com/sanserogames/letsgo-os/kernel/log"
 )
 
 type IdtEntry struct {
@@ -62,7 +64,7 @@ var (
 
 func interrupt_debug(args ...interface{}) {
 	if PRINT_INTERRUPT_DEBUG {
-		kdebugln(args)
+		log.KDebugLn(args)
 	}
 }
 
@@ -85,7 +87,7 @@ func scheduleStackArg(fn func(arg uintptr), arg uintptr)
 
 //go:nosplit
 func scheduleStackFail(caller uintptr) {
-	kprint("Called from ")
+	log.KPrint("Called from ")
 	printFuncName(caller - 4)
 	kernelPanic("Called schedulestack on schedule stack")
 }
@@ -94,8 +96,8 @@ func scheduleStackFail(caller uintptr) {
 func stackFail(esp, failingAddress uintptr) {
 	setGS(KGS_SELECTOR)
 	setDS(KDS_SELECTOR)
-	kerrorln("Return from schedule stack to a location not in the kernel")
-	kprintln("Offending Address: ", failingAddress, ", ESP: ", esp)
+	log.KErrorLn("Return from schedule stack to a location not in the kernel")
+	log.KPrintLn("Offending Address: ", failingAddress, ", ESP: ", esp)
 	kernelPanic("Fix pls")
 }
 
@@ -120,7 +122,7 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 		// Test for scheduler stack underflow
 		DisableInterrupts()
 		Hlt()
-		kprintln(uintptr(info.ESP), " ", uintptr(scheduleThread.kernelStack.lo))
+		log.KPrintLn(uintptr(info.ESP), " ", uintptr(scheduleThread.kernelStack.lo))
 		kernelPanic("Stack underflow")
 	}
 
@@ -137,9 +139,9 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 	} else {
 		if regs.KernelESP > uint32(currentThread.kernelStack.hi) ||
 			regs.KernelESP < uint32(currentThread.kernelStack.lo) {
-			kerrorln("kernel stack for process is out of range")
-			kprintln("KernelESP: ", uintptr(regs.KernelESP), " Stack Hi: ", currentThread.kernelStack.hi, " Stack Low: ", currentThread.kernelStack.lo)
-			kprintln(" TSS ESP0: ", tss.esp0)
+			log.KErrorLn("kernel stack for process is out of range")
+			log.KPrintLn("KernelESP: ", uintptr(regs.KernelESP), " Stack Hi: ", currentThread.kernelStack.hi, " Stack Low: ", currentThread.kernelStack.lo)
+			log.KPrintLn(" TSS ESP0: ", tss.esp0)
 			kernelPanic("Fix pls")
 		}
 		currentThread.info = info
@@ -149,8 +151,8 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 
 	interrupt_debug("[INTERRUPT-IN] Debug infos")
 	if PRINT_INTERRUPT_DEBUG {
-		printTid(defaultLogWriter, currentThread)
-		printThreadRegisters(currentThread, defaultLogWriter)
+		printTid(currentThread)
+		printThreadRegisters(currentThread)
 	}
 
 	handlers[info.InterruptNumber]()
@@ -174,8 +176,8 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 
 	interrupt_debug("[INTERRUPT-OUT] Debug infos")
 	if PRINT_INTERRUPT_DEBUG {
-		printTid(defaultLogWriter, currentThread)
-		printThreadRegisters(currentThread, defaultLogWriter)
+		printTid(currentThread)
+		printThreadRegisters(currentThread)
 	}
 
 	if currentThread.isKernelInterrupt {
@@ -206,9 +208,9 @@ func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8
 }
 
 func defaultHandler() {
-	kerrorln("\nUnhandled interrupt! Disabling Interrupt and halting!")
-	kprintln("Interrupt number: ", currentThread.info.InterruptNumber)
-	kprintln("Exception code: ", uintptr(currentThread.info.ExceptionCode))
+	log.KErrorLn("\nUnhandled interrupt! Disabling Interrupt and halting!")
+	log.KPrintLn("Interrupt number: ", currentThread.info.InterruptNumber)
+	log.KPrintLn("Exception code: ", uintptr(currentThread.info.ExceptionCode))
 	kernelPanic("fix pls")
 }
 
@@ -236,6 +238,6 @@ func InitInterrupts() {
 
 func printIdt(idt []IdtEntry) {
 	for _, n := range idt {
-		kdebugln(uintptr(n.offsetLow), " ", uintptr(n.selector), " ", uintptr(n.flags), " ", uintptr(n.offsetHigh))
+		log.KDebugLn(uintptr(n.offsetLow), " ", uintptr(n.selector), " ", uintptr(n.flags), " ", uintptr(n.offsetHigh))
 	}
 }

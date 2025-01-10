@@ -2,6 +2,8 @@ package kernel
 
 import (
 	"unsafe"
+
+	"github.com/sanserogames/letsgo-os/kernel/log"
 )
 
 type domain struct {
@@ -184,7 +186,7 @@ func restoreFpRegs(buffer uintptr)
 func AddDomain(d *domain) {
 	allDomains.Append(d)
 	if ENABLE_DEBUG {
-		kdebugln("Added new domain with pid ", d.pid)
+		log.KDebugLn("Added new domain with pid ", d.pid)
 	}
 	if currentDomain == nil || currentThread == nil {
 		currentDomain = allDomains.head
@@ -210,8 +212,8 @@ func ExitDomain(d *domain) {
 func cleanUpDomain(d *domain) {
 	// Clean up threads
 	for cur := d.runningThreads.thread; d.runningThreads.thread != nil; cur = d.runningThreads.thread {
-		//kdebugln("Clean up thread ", cur.tid)
-		//kdebugln("t:", (uintptr)(unsafe.Pointer(cur)), " t.n:", (uintptr)(unsafe.Pointer(cur.next)), " t.p:", (uintptr)(unsafe.Pointer(cur.prev)))
+		//log.KDebugln("Clean up thread ", cur.tid)
+		//log.KDebugln("t:", (uintptr)(unsafe.Pointer(cur)), " t.n:", (uintptr)(unsafe.Pointer(cur.next)), " t.p:", (uintptr)(unsafe.Pointer(cur.prev)))
 		d.runningThreads.Dequeue(cur)
 		cleanUpThread(cur)
 	}
@@ -224,7 +226,7 @@ func cleanUpDomain(d *domain) {
 
 	// Clean up kernel resources
 	if ENABLE_DEBUG {
-		kdebugln("Allocated pages ", allocatedPages, " (out of", maxPages, ")")
+		log.KDebugLn("Allocated pages ", allocatedPages, " (out of", maxPages, ")")
 	}
 	Schedule()
 	FreePage((uintptr)(unsafe.Pointer(d)))
@@ -249,7 +251,7 @@ func ExitThread(t *thread) {
 	}
 	t.domain.RemoveThread(t)
 	if ENABLE_DEBUG {
-		kdebugln("Removing thread ", t.tid, " from domain ", t.domain.pid)
+		log.KDebugLn("Removing thread ", t.tid, " from domain ", t.domain.pid)
 	}
 	scheduleStackArg(func(threadPtr uintptr) {
 		thread := (*thread)(unsafe.Pointer(threadPtr))
@@ -280,12 +282,12 @@ func ResumeThread(t *thread) {
 
 func Schedule() {
 	if currentDomain == nil {
-		kerrorln("No Domains to schedule")
+		log.KErrorLn("No Domains to schedule")
 		Shutdown()
 		// DisableInterrupts()
 		// Hlt()
 	}
-	//kdebug("Scheduling in ")
+	//log.KDebug("Scheduling in ")
 	//printTid(defaultLogWriter, currentThread)
 	nextDomain := currentDomain.next
 	newThread := nextDomain.runningThreads.Next()
@@ -303,9 +305,9 @@ func Schedule() {
 	//if newThread.tid == currentThread.tid && currentThread.tid != 0 {
 	//    kernelPanic("Why only one thread?")
 	//}
-	//kprintln("next domain: ", nextDomain.pid)
-	//kprintln("next thread: ", newThread.tid)
-	//kprintln("domain threads: ", nextDomain.numThreads)
+	//log.KPrintln("next domain: ", nextDomain.pid)
+	//log.KPrintln("next thread: ", newThread.tid)
+	//log.KPrintln("domain threads: ", nextDomain.numThreads)
 
 	if newThread == nil {
 		if kernelHlt {
@@ -328,7 +330,7 @@ func Schedule() {
 
 	switchToThread(newThread)
 
-	//kdebug("Now executing: ")
+	//log.KDebug("Now executing: ")
 	//printTid(defaultLogWriter, currentThread)
 }
 
@@ -343,14 +345,14 @@ func switchToThread(t *thread) {
 	}
 
 	// Load next thread
-	//kdebugln("Switching to domain pid", currentDomain.pid, " and thread ", t.tid)
+	//log.KDebugln("Switching to domain pid", currentDomain.pid, " and thread ", t.tid)
 	currentThread = t
 
 	addr := uintptr(unsafe.Pointer(&(currentThread.fpState)))
 	offset := currentThread.fpOffset
 	if offset != 0xffffffff {
 		if (addr+offset)%16 != 0 {
-			kprintln(addr, " ", offset)
+			log.KPrintLn(addr, " ", offset)
 			kernelPanic("Cannot restore FP state. Not aligned. Did array move?")
 		}
 		restoreFpRegs(addr + offset)

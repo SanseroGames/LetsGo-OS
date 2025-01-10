@@ -3,6 +3,8 @@ package kernel
 import (
 	"path"
 	"unsafe"
+
+	"github.com/sanserogames/letsgo-os/kernel/log"
 )
 
 const (
@@ -116,18 +118,18 @@ func (m *MemSpace) tryMapPage(page uintptr, virtAddr uintptr, flags uint8) bool 
 
 func (m *MemSpace) MapPage(page uintptr, virtAddr uintptr, flags uint8) {
 	if PAGE_DEBUG {
-		kdebugln("[PAGE] Mapping page ", page, " to virt addr ", virtAddr)
+		log.KDebugLn("[PAGE] Mapping page ", page, " to virt addr ", virtAddr)
 	}
 	if !m.tryMapPage(page, virtAddr, flags) {
-		kerrorln("Page already present")
-		kprintln(page, " -> ", virtAddr)
+		log.KErrorLn("Page already present")
+		log.KPrintLn(page, " -> ", virtAddr)
 		kernelPanic("Tried to remap a page")
 	}
 }
 
 func (m *MemSpace) UnmapPage(virtAddr uintptr) {
 	if PAGE_DEBUG {
-		kdebug("[PAGE] Unmapping page ", virtAddr)
+		log.KDebug("[PAGE] Unmapping page ", virtAddr)
 	}
 	pt := m.getPageTable(virtAddr)
 	e := pt.getEntry(virtAddr)
@@ -135,11 +137,11 @@ func (m *MemSpace) UnmapPage(virtAddr uintptr) {
 		e.unsetPresent()
 		FreePage(e.getPhysicalAddress())
 		if PAGE_DEBUG {
-			kdebugln("(phys-addr: ", e.getPhysicalAddress(), ")")
+			log.KDebugLn("(phys-addr: ", e.getPhysicalAddress(), ")")
 		}
 	} else {
 		if PAGE_DEBUG {
-			kdebugln("\n[PAGE] WARNING: Page was already unmapped")
+			log.KDebugLn("\n[PAGE] WARNING: Page was already unmapped")
 		}
 	}
 }
@@ -151,11 +153,11 @@ func (m *MemSpace) getPageTableEntry(virtAddr uintptr) *pageTableEntry {
 
 func (m *MemSpace) FindSpaceFor(startAddr uintptr, length uintptr) uintptr {
 	if PAGE_DEBUG {
-		kdebugln("[PAGE] Find space for ", startAddr, " with size ", length)
+		log.KDebugLn("[PAGE] Find space for ", startAddr, " with size ", length)
 	}
 	if startAddr < MIN_ALLOC_VIRT_ADDR {
 		if PAGE_DEBUG {
-			kdebugln("[PAGE] startAddr was below MIN_ALLOC_VIRT_ADDR")
+			log.KDebugLn("[PAGE] startAddr was below MIN_ALLOC_VIRT_ADDR")
 		}
 		startAddr = MIN_ALLOC_VIRT_ADDR
 	}
@@ -165,7 +167,7 @@ func (m *MemSpace) FindSpaceFor(startAddr uintptr, length uintptr) uintptr {
 		}
 		endAddr := startAddr + length
 		if PAGE_DEBUG {
-			kdebugln("[PAGE][FIND] Trying ", startAddr, " with endaddr ", endAddr)
+			log.KDebugLn("[PAGE][FIND] Trying ", startAddr, " with endaddr ", endAddr)
 		}
 		if endAddr > MAX_ALLOC_VIRT_ADDR {
 			break
@@ -180,17 +182,17 @@ func (m *MemSpace) FindSpaceFor(startAddr uintptr, length uintptr) uintptr {
 		}
 		if isRangeFree {
 			if PAGE_DEBUG {
-				kdebugln("[PAGE][FIND] Found ", startAddr)
+				log.KDebugLn("[PAGE][FIND] Found ", startAddr)
 			}
 			return startAddr
 		} else {
 			if PAGE_DEBUG {
-				kdebugln("[PAGE][FIND] position did not work")
+				log.KDebugLn("[PAGE][FIND] position did not work")
 			}
 		}
 	}
 	if PAGE_DEBUG {
-		kdebugln("[PAGE][FIND] Did not find suitable location ", startAddr)
+		log.KDebugLn("[PAGE][FIND] Did not find suitable location ", startAddr)
 	}
 	return 0
 }
@@ -200,7 +202,7 @@ func (m *MemSpace) GetPhysicalAddress(virtAddr uintptr) (uintptr, bool) {
 		return 0, false
 	} else {
 		if PAGE_DEBUG {
-			// kdebugln("[PAGING] Translated address: ", virtAddr, "->", uintptr(e&^(PAGE_SIZE-1)))
+			// log.KDebugln("[PAGING] Translated address: ", virtAddr, "->", uintptr(e&^(PAGE_SIZE-1)))
 		}
 		e := m.getPageTableEntry(virtAddr)
 		return uintptr(e.getPhysicalAddress()) | (virtAddr & (PAGE_SIZE - 1)), true
@@ -255,23 +257,23 @@ func getPageFaultAddr() uint32
 
 func pageFaultHandler() {
 	code := currentThread.info.ExceptionCode
-	kerrorln("\nPage Fault! Disabling Interrupt and halting!")
-	kprintln("Exception code: ", uintptr(code))
-	kprintln("Present: ", (code&PAGE_FAULT_PRESENT)>>(PAGE_FAULT_PRESENT>>1),
+	log.KErrorLn("\nPage Fault! Disabling Interrupt and halting!")
+	log.KPrintLn("Exception code: ", uintptr(code))
+	log.KPrintLn("Present: ", (code&PAGE_FAULT_PRESENT)>>(PAGE_FAULT_PRESENT>>1),
 		" Write: ", (code&PAGE_FAULT_WRITE)>>(PAGE_FAULT_WRITE>>1),
 		" user: ", (code&PAGE_FAULT_USER)>>(PAGE_FAULT_USER>>1),
 		" instruction: ", (code&PAGE_FAULT_INSTRUCTION_FETCH)>>(PAGE_FAULT_INSTRUCTION_FETCH>>1))
 	causingAddr := getPageFaultAddr()
-	kprint("Causing Address: ", uintptr(causingAddr))
+	log.KPrint("Causing Address: ", uintptr(causingAddr))
 	f := runtimeFindFunc(uintptr(causingAddr))
 	if f.valid() {
 		s := f._Func().Name()
 		file, line := f._Func().FileLine(uintptr(causingAddr))
 		_, filename := path.Split(file)
-		kprint(" (", s, " (", filename, ":", line, ")", ")")
+		log.KPrint(" (", s, " (", filename, ":", line, ")", ")")
 	}
-	kprintln("")
-	kprintln("Current Page Directory: ", (uintptr)(unsafe.Pointer(getCurrentPageDir())))
+	log.KPrintLn("")
+	log.KPrintLn("Current Page Directory: ", (uintptr)(unsafe.Pointer(getCurrentPageDir())))
 	kernelPanic("Page Fault")
 }
 
@@ -285,14 +287,14 @@ func Memclr(p uintptr, n int) {
 
 func FreePage(addr uintptr) {
 	if addr%PAGE_SIZE != 0 {
-		kdebugln("[PAGE] WARNING: freeingPage but is not page aligned: ", addr)
+		log.KDebugLn("[PAGE] WARNING: freeingPage but is not page aligned: ", addr)
 		return
 	}
 	// Just to check for immediate double free
 	// If I were to check for double freeing correctly I would have to traverse the list
 	// every time completely but that would make freeing O(n)
 	if addr == uintptr(unsafe.Pointer(freePagesList)) {
-		kdebugln("[Page] immediate double freeing page ", addr)
+		log.KDebugLn("[Page] immediate double freeing page ", addr)
 		kernelPanic("[Page] double freeing page")
 	}
 	p := (*page)(unsafe.Pointer(addr))
@@ -309,7 +311,7 @@ func AllocPage() uintptr {
 	freePagesList = p.next
 	allocatedPages++
 	if PAGE_DEBUG {
-		kdebugln("[PAGE]: Allocated ", unsafe.Pointer(p))
+		log.KDebugLn("[PAGE]: Allocated ", unsafe.Pointer(p))
 	}
 	return uintptr(unsafe.Pointer(p))
 }
@@ -369,7 +371,7 @@ func InitPaging() {
 	switchPageDir(kernelPageDirectory)
 
 	if PAGE_DEBUG {
-		kdebugln("[PAGE] Got ", maxPages, " pages. Initialization took ", allocatedPages, " pages")
+		log.KDebugLn("[PAGE] Got ", maxPages, " pages. Initialization took ", allocatedPages, " pages")
 	}
 	allocatedPages = 0
 	SetInterruptHandler(0xE, pageFaultHandler, KCS_SELECTOR, PRIV_USER)
@@ -378,11 +380,11 @@ func InitPaging() {
 
 func printPageTable(table *PageTable, start, length int) {
 	for i, n := range table[start : start+length] {
-		kdebug(uintptr(n))
+		log.KDebug(uintptr(n))
 		if i%16 == 15 {
-			kdebugln("")
+			log.KDebugLn("")
 		} else {
-			kdebug(" ")
+			log.KDebug(" ")
 		}
 	}
 }

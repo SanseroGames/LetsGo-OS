@@ -2,6 +2,8 @@ package kernel
 
 import (
 	"unsafe"
+
+	"github.com/sanserogames/letsgo-os/kernel/log"
 )
 
 type GdtEntry struct {
@@ -236,6 +238,6 @@ func FlushTlsTable(table []GdtEntry) {
 
 func printGdt(gdt []GdtEntry) {
 	for _, n := range gdt {
-		kdebugln(n.limitLow, " ", n.baseLow, " ", n.baseMid, " ", n.access, " ", n.limitHighAndFlags, " ", n.baseHigh)
+		log.KDebugLn(n.limitLow, " ", n.baseLow, " ", n.baseMid, " ", n.access, " ", n.limitHighAndFlags, " ", n.baseHigh)
 	}
 }
