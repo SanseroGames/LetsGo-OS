@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/panic"
 )
 
 const (
@@ -59,7 +60,7 @@ func (m *MemSpace) MapPage(page uintptr, virtAddr uintptr, flags uint8) {
 	if !m.TryMapPage(page, virtAddr, flags) {
 		log.KErrorLn("Page already present")
 		log.KPrintLn(page, " -> ", virtAddr)
-		// kernelPanic("Tried to remap a page") // TODO: How do I panic here?
+		panic.KernelPanic("Tried to remap a page")
 	}
 }
 

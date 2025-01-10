@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/panic"
 )
 
 const (
@@ -75,7 +76,7 @@ func FreePage(addr uintptr) {
 	// every time completely but that would make freeing O(n)
 	if addr == uintptr(unsafe.Pointer(freePagesList)) {
 		log.KDebugLn("[Page] immediate double freeing page ", addr)
-		// kernelPanic("[Page] double freeing page") // TODO: How do I panic here?
+		panic.KernelPanic("[Page] double freeing page")
 	}
 	p := (*page)(unsafe.Pointer(addr))
 	p.next = freePagesList
@@ -85,7 +86,7 @@ func FreePage(addr uintptr) {
 
 func AllocPage() uintptr {
 	if freePagesList == nil {
-		// kernelPanic("[PAGE] Out of pages to allocate") // TODO: How do I panic here?
+		panic.KernelPanic("[PAGE] Out of pages to allocate")
 	}
 	p := freePagesList
 	freePagesList = p.next
