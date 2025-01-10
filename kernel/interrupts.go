@@ -234,6 +234,12 @@ func InitInterrupts() {
 	idtDescriptor.IdtAddressLow = uint16(idtAddr)
 	idtDescriptor.IdtAddressHigh = uint16(idtAddr >> 16)
 	installIDT(&idtDescriptor)
+
+	SetInterruptHandler(0xd, gpfPanic, KCS_SELECTOR, PRIV_USER)
+}
+
+func gpfPanic() {
+	kernelPanic("Received General Protection Fault")
 }
 
 func printIdt(idt []IdtEntry) {

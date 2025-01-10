@@ -57,8 +57,6 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 
 	InitInterrupts()
 
-	SetInterruptHandler(0xd, gpfPanic, KCS_SELECTOR, PRIV_USER)
-
 	InitSyscall()
 
 	InitPIC()
@@ -108,12 +106,6 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 	kernelThreadInit()
 	kernelPanic("Could not jump to user space :/")
 
-}
-
-func gpfPanic() {
-	log.KErrorLn("\nReceived General Protection fault. Disabling Interrupts and halting")
-	log.KPrintLn("Errorcode: ", uintptr(currentThread.info.ExceptionCode))
-	panicHelper(currentThread)
 }
 
 func printFuncName(pc uintptr) {
@@ -218,13 +210,6 @@ func printRegisters(info *InterruptInfo, regs *RegisterState) {
 
 func printTid(t *thread) {
 	log.KPrintLn("Pid: ", t.domain.pid, ", Tid: ", t.tid)
-}
-
-func delay(v int) {
-	for i := 0; i < 684000; i++ {
-		for j := 0; j < v; j++ {
-		}
-	}
 }
 
 func cstring(ptr uintptr) string {
