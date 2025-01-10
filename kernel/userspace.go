@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/mm"
 )
 
 type _func struct {
@@ -126,14 +127,14 @@ func SetInterruptStack(addr uintptr) {
 
 func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, targetDomain *domain) {
 	newThreadAddr := (uintptr)(unsafe.Pointer(outThread))
-	Memclr(newThreadAddr, int(unsafe.Sizeof(outThread)))
+	mm.Memclr(newThreadAddr, int(unsafe.Sizeof(outThread)))
 	outThread.fpOffset = 0xffffffff
-	kernelStack := AllocPage()
+	kernelStack := mm.AllocPage()
 	if ENABLE_DEBUG {
 		log.KDebugLn("thread stack ", kernelStack)
 	}
 
-	Memclr(kernelStack, PAGE_SIZE)
+	mm.Memclr(kernelStack, PAGE_SIZE)
 	outThread.kernelStack.lo = kernelStack
 	outThread.kernelStack.hi = kernelStack + PAGE_SIZE
 	outThread.kernelInfo.ESP = uint32(outThread.kernelStack.hi)
@@ -204,8 +205,8 @@ func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
 
 	var stackPages [defaultStackPages]uintptr
 	for i := 0; i < defaultStackPages; i++ {
-		stack := AllocPage()
-		Memclr(stack, PAGE_SIZE)
+		stack := mm.AllocPage()
+		mm.Memclr(stack, PAGE_SIZE)
 		outDomain.MemorySpace.MapPage(stack, defaultStackStart-uintptr((i+1)*PAGE_SIZE), PAGE_RW|PAGE_PERM_USER)
 		stackPages[i] = stack
 	}

@@ -1,5 +1,7 @@
 package kernel
 
+import "github.com/sanserogames/letsgo-os/kernel/mm"
+
 type domain struct {
 	next *domain
 
@@ -8,7 +10,7 @@ type domain struct {
 	nextTid    uint32
 
 	Segments    SegmentList
-	MemorySpace MemSpace
+	MemorySpace mm.MemSpace
 
 	runningThreads threadList
 	blockedThreads threadList

@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/mm"
 )
 
 const PRINT_SYSCALL = ENABLE_DEBUG
@@ -358,16 +359,16 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	pathname := cstring(addr)
 
 	// Create new domain
-	newDomainMem := AllocPage()
-	Memclr(newDomainMem, PAGE_SIZE)
+	newDomainMem := mm.AllocPage()
+	mm.Memclr(newDomainMem, PAGE_SIZE)
 	newDomain := (*domain)(unsafe.Pointer(newDomainMem))
-	newThreadMem := AllocPage()
-	Memclr(newThreadMem, PAGE_SIZE)
+	newThreadMem := mm.AllocPage()
+	mm.Memclr(newThreadMem, PAGE_SIZE)
 	newThread := (*thread)(unsafe.Pointer(newThreadMem))
 	err := StartProgram(pathname, newDomain, newThread)
 	if err != 0 {
-		FreePage(newDomainMem)
-		FreePage(newThreadMem)
+		mm.FreePage(newDomainMem)
+		mm.FreePage(newThreadMem)
 		return 0, syscall.ENOENT
 	}
 	newDomain.MemorySpace.MapPage(newThreadMem, newThreadMem, PAGE_RW|PAGE_PERM_KERNEL)
@@ -458,7 +459,7 @@ func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EFAULT
 	}
 	item := (*statxData)(unsafe.Pointer(addr))
-	Memclr(addr, int(unsafe.Sizeof(item)))
+	mm.Memclr(addr, int(unsafe.Sizeof(item)))
 	// Trying to replicate linux behavior
 	item.stx_mask = STATX_BASIC_STATS
 	item.stx_blksize = 1024
@@ -493,8 +494,8 @@ func linuxUnameSyscall(args syscallArgs) (uint32, syscall.Errno) {
 func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	flags := args.arg1
 	stack := args.arg2
-	newThreadMem := AllocPage()
-	Memclr(newThreadMem, PAGE_SIZE)
+	newThreadMem := mm.AllocPage()
+	mm.Memclr(newThreadMem, PAGE_SIZE)
 	newThread := (*thread)(unsafe.Pointer(newThreadMem))
 	CreateNewThread(newThread, uintptr(stack), currentThread, currentThread.domain)
 	currentThread.domain.MemorySpace.MapPage(newThreadMem, newThreadMem, PAGE_RW|PAGE_PERM_KERNEL)
@@ -550,8 +551,8 @@ func linuxBrkSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	}
 	//text_mode_print_hex32(brk)
 	for i := (brk + PAGE_SIZE - 1) &^ (PAGE_SIZE - 1); i < newBrk; i += PAGE_SIZE {
-		p := AllocPage()
-		Memclr(p, PAGE_SIZE)
+		p := mm.AllocPage()
+		mm.Memclr(p, PAGE_SIZE)
 		flags := uint8(PAGE_PERM_USER | PAGE_RW)
 		// log.KDebugln("[brk] Map page ", i, " -> ", p)
 
@@ -591,14 +592,14 @@ func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
 	}
 
 	for i := startAddr; i < startAddr+size; i += PAGE_SIZE {
-		p := AllocPage()
-		Memclr(p, PAGE_SIZE)
+		p := mm.AllocPage()
+		mm.Memclr(p, PAGE_SIZE)
 		pageFlags := uint8(PAGE_PERM_USER)
 		if prot&MMAP_PROT_WRITE == MMAP_PROT_WRITE {
 			pageFlags |= PAGE_RW
 		}
 
-		if currentThread.domain.MemorySpace.getPageTableEntry(i).isPresent() {
+		if currentThread.domain.MemorySpace.GetPageTableEntry(i).IsPresent() {
 			if flags&MMAP_MAP_FIXED == MMAP_MAP_FIXED {
 				// TODO: Clear or free and remap page?
 				// currentThread.domain.MemorySpace.unMapPage(i)
@@ -697,7 +698,7 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EBADF
 	}
 
-	if !currentThread.domain.MemorySpace.isRangeAccessible(arr, arr+uintptr(count*8)) { // todo: sizeof?
+	if !currentThread.domain.MemorySpace.IsRangeAccessible(arr, arr+uintptr(count*8)) { // todo: sizeof?
 		return 0, syscall.EFAULT
 	}
 
@@ -709,7 +710,7 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	iovecs := unsafe.Slice((*ioVec)(unsafe.Pointer(addr)), count)
 	printed := 0
 	for _, n := range iovecs {
-		if !currentThread.domain.MemorySpace.isRangeAccessible(uintptr(n.iovBase), uintptr(n.iovBase)+uintptr(n.iovLen)) {
+		if !currentThread.domain.MemorySpace.IsRangeAccessible(uintptr(n.iovBase), uintptr(n.iovBase)+uintptr(n.iovLen)) {
 			return 0, syscall.EFAULT
 		}
 		addr, ok = currentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(n.iovBase))
@@ -738,7 +739,7 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EBADF
 	}
 
-	if !currentThread.domain.MemorySpace.isRangeAccessible(text, text+uintptr(length)) {
+	if !currentThread.domain.MemorySpace.IsRangeAccessible(text, text+uintptr(length)) {
 		return 0, syscall.EFAULT
 	}
 

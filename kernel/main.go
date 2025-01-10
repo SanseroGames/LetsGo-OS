@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/mm"
 )
 
 var progs = [...]string{
@@ -79,11 +80,11 @@ func kmain(info *MultibootInfo, stackstart uintptr, stackend uintptr) {
 
 	var err int
 	for i := 0; i < len(progs); i++ {
-		newDomainMem := AllocPage()
-		Memclr(newDomainMem, PAGE_SIZE)
+		newDomainMem := mm.AllocPage()
+		mm.Memclr(newDomainMem, PAGE_SIZE)
 		newDomain := (*domain)(unsafe.Pointer(newDomainMem))
-		newThreadMem := AllocPage()
-		Memclr(newThreadMem, PAGE_SIZE)
+		newThreadMem := mm.AllocPage()
+		mm.Memclr(newThreadMem, PAGE_SIZE)
 		newThread := (*thread)(unsafe.Pointer(newThreadMem))
 		err = StartProgram(progs[i], newDomain, newThread)
 		if err != 0 {

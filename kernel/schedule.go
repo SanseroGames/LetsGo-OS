@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/mm"
 )
 
 type stack struct {
@@ -70,10 +71,10 @@ func cleanUpDomain(d *domain) {
 
 	// Clean up kernel resources
 	if ENABLE_DEBUG {
-		log.KDebugLn("Allocated pages ", allocatedPages, " (out of", maxPages, ")")
+		log.KDebugLn("Allocated pages ", mm.AllocatedPages, " (out of", maxPages, ")")
 	}
 	Schedule()
-	FreePage((uintptr)(unsafe.Pointer(d)))
+	mm.FreePage((uintptr)(unsafe.Pointer(d)))
 }
 
 // Execute on scheduleStack

@@ -4,6 +4,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/mm"
 )
 
 type GdtEntry struct {
@@ -134,7 +135,7 @@ func InitSegments() {
 
 	gdtTableSlice := gdtTable[:]
 
-	Memclr(uintptr(unsafe.Pointer(&gdtTable)), len(gdtTable))
+	mm.Memclr(uintptr(unsafe.Pointer(&gdtTable)), len(gdtTable))
 
 	gdtDescriptor = *getGDT()
 	oldGdtAddr := uintptr(uint32(gdtDescriptor.GdtAddressLow) |

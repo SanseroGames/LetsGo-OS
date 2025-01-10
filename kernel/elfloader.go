@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/mm"
 )
 
 type auxVecEntry struct {
@@ -111,7 +112,7 @@ func LoadAuxVector(buf []auxVecEntry, elfHdr *elf.Header32, loadAddr uintptr) in
 	return start
 }
 
-func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintptr, uintptr, *MultibootModule) {
+func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uintptr, uintptr, *MultibootModule) {
 	var module *MultibootModule
 	loadedModuleSlice := loadedModules[:]
 	for idx, loadedModule := range loadedModuleSlice {
@@ -155,8 +156,8 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 			offset := header.Vaddr & (PAGE_SIZE - 1)
 			start := uint32(0)
 			if offset != 0 {
-				p := AllocPage()
-				Memclr(p, PAGE_SIZE)
+				p := mm.AllocPage()
+				mm.Memclr(p, PAGE_SIZE)
 				target := unsafe.Slice((*byte)(unsafe.Pointer(p)), PAGE_SIZE)
 
 				end := int(PAGE_SIZE - offset)
@@ -169,8 +170,8 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 				start = PAGE_SIZE - offset
 			}
 			for i := start; i < header.Filesz; i += PAGE_SIZE {
-				p := AllocPage()
-				Memclr(p, PAGE_SIZE)
+				p := mm.AllocPage()
+				mm.Memclr(p, PAGE_SIZE)
 				target := unsafe.Slice((*byte)(unsafe.Pointer(p)), PAGE_SIZE)
 
 				end := int(i + PAGE_SIZE)
@@ -184,8 +185,8 @@ func LoadElfFile(multibootModule string, space *MemSpace) (*elf.Header32, uintpt
 			}
 			if header.Filesz < header.Memsz {
 				for i := localTop; i < header.Vaddr+header.Memsz; i += PAGE_SIZE {
-					p := AllocPage()
-					Memclr(p, PAGE_SIZE)
+					p := mm.AllocPage()
+					mm.Memclr(p, PAGE_SIZE)
 					space.MapPage(p, uintptr(i), PAGE_RW|PAGE_PERM_USER)
 					localTop = i + PAGE_SIZE
 				}
