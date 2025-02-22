@@ -10,7 +10,7 @@ TEXT scheduleStackReturn(SB),NOSPLIT,$0
     RET
 stackFail:
     MOVL $·scheduleThread(SB), BX
-    MOVL (thread_kernelStack+stack_hi)(BX), SP
+    MOVL (Thread_kernelStack+stack_hi)(BX), SP
     PUSHL AX
     PUSHL DX
     CALL ·stackFail(SB)
@@ -19,7 +19,7 @@ stackFail:
 TEXT doubleStackReturnWrapper(SB),NOSPLIT,$0
     CLI
     MOVL $·scheduleThread(SB), BX
-    MOVL (thread_kernelStack+stack_hi)(BX), SP
+    MOVL (Thread_kernelStack+stack_hi)(BX), SP
     CALL ·doubleStackReturn(SB)
     HLT
 
@@ -36,18 +36,18 @@ TEXT ·scheduleStack(SB),NOSPLIT,$0-4
 TEXT doScheduleStack(SB),NOSPLIT,$0
     // Test if invocation is already in schedule stack
     MOVL $·scheduleThread(SB), AX
-    MOVL (thread_kernelStack+stack_lo)(AX), BX
+    MOVL (Thread_kernelStack+stack_lo)(AX), BX
     CMPL SP, BX
     JL normal
-    MOVL (thread_kernelStack+stack_hi)(AX), BX
+    MOVL (Thread_kernelStack+stack_hi)(AX), BX
     CMPL SP, BX
     JL already_in_schedule_stack
 
 normal:
-    MOVL ·currentThread(SB), AX
+    MOVL ·CurrentThread(SB), AX
 
-    MOVL SP, (thread_kernelInfo+InterruptInfo_ESP)(AX)
-    MOVL $scheduleStackReturn(SB), (thread_kernelInfo+InterruptInfo_EIP)(AX)
+    MOVL SP, (Thread_kernelInfo+InterruptInfo_ESP)(AX)
+    MOVL $scheduleStackReturn(SB), (Thread_kernelInfo+InterruptInfo_EIP)(AX)
 
     MOVL BX, SP
     PUSHL SI
@@ -56,10 +56,10 @@ normal:
     MOVL 0(DI), DI
     CALL DI
 
-    MOVL ·currentThread(SB), AX
-    MOVL (thread_kernelInfo+InterruptInfo_ESP)(AX), SP
-    MOVL (thread_kernelInfo+InterruptInfo_EIP)(AX), DI
-    MOVL $·doubleStackReturn(SB), (thread_kernelInfo+InterruptInfo_EIP)(AX)
+    MOVL ·CurrentThread(SB), AX
+    MOVL (Thread_kernelInfo+InterruptInfo_ESP)(AX), SP
+    MOVL (Thread_kernelInfo+InterruptInfo_EIP)(AX), DI
+    MOVL $·doubleStackReturn(SB), (Thread_kernelInfo+InterruptInfo_EIP)(AX)
 
     JMP DI
 

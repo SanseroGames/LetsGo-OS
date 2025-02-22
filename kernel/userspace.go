@@ -111,10 +111,10 @@ var (
 // Don't forget to multiply by 8. it is not array index.
 func flushTss(segmentIndex int)
 
-func kernelThreadInit() {
-	SetInterruptStack(currentThread.kernelStack.hi)
-	switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
-	JumpUserMode(currentThread.regs, currentThread.info)
+func KernelThreadInit() {
+	SetInterruptStack(CurrentThread.kernelStack.hi)
+	switchPageDir(CurrentThread.domain.MemorySpace.PageDirectory)
+	JumpUserMode(CurrentThread.regs, CurrentThread.info)
 }
 
 func JumpUserMode(regs RegisterState, info InterruptInfo)
@@ -125,7 +125,7 @@ func SetInterruptStack(addr uintptr) {
 	tss.esp0 = uint32(addr)
 }
 
-func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, targetDomain *domain) {
+func CreateNewThread(outThread *Thread, newStack uintptr, cloneThread *Thread, targetDomain *Domain) {
 	newThreadAddr := (uintptr)(unsafe.Pointer(outThread))
 	mm.Memclr(newThreadAddr, int(unsafe.Sizeof(outThread)))
 	outThread.fpOffset = 0xffffffff
@@ -138,7 +138,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
 	outThread.kernelStack.lo = kernelStack
 	outThread.kernelStack.hi = kernelStack + PAGE_SIZE
 	outThread.kernelInfo.ESP = uint32(outThread.kernelStack.hi)
-	outThread.kernelInfo.EIP = hackyGetFuncAddr(kernelThreadInit)
+	outThread.kernelInfo.EIP = hackyGetFuncAddr(KernelThreadInit)
 	outThread.kernelInfo.CS = KCS_SELECTOR
 	outThread.kernelInfo.SS = KDS_SELECTOR
 	outThread.kernelRegs.GS = KGS_SELECTOR
@@ -184,7 +184,7 @@ func CreateNewThread(outThread *thread, newStack uintptr, cloneThread *thread, t
 }
 
 // Need pointer as this function should not do any memory allocations
-func StartProgram(path string, outDomain *domain, outMainThread *thread) int {
+func StartProgram(path string, outDomain *Domain, outMainThread *Thread) int {
 	if outDomain == nil || outMainThread == nil {
 		log.KErrorLn("Cannot start program. Please allocate the memory for me")
 		return 1

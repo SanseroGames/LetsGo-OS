@@ -27,9 +27,9 @@ const (
 var picHandlers [16]func()
 
 func PICInterruptHandler() {
-	info := &currentThread.info
-	if currentThread.isKernelInterrupt {
-		info = &currentThread.kernelInfo
+	info := &CurrentThread.info
+	if CurrentThread.isKernelInterrupt {
+		info = &CurrentThread.kernelInfo
 	}
 	irq := info.InterruptNumber - uint32(PIC1Offset)
 	if irq == 7 {

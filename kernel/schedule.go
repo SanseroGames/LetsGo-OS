@@ -17,44 +17,44 @@ type taskswitchbuf struct {
 }
 
 var (
-	currentThread  *thread    = &scheduleThread
-	currentDomain  *domain    = nil
+	CurrentThread  *Thread    = &scheduleThread
+	CurrentDomain  *Domain    = nil
 	allDomains     domainList = domainList{head: nil, tail: nil}
 	largestPid     uint32     = 0x0
 	kernelHlt      bool       = false
-	scheduleThread thread     = thread{}
+	scheduleThread Thread     = Thread{}
 )
 
 func backupFpRegs(buffer uintptr)
 func restoreFpRegs(buffer uintptr)
 
-func AddDomain(d *domain) {
+func AddDomain(d *Domain) {
 	allDomains.Append(d)
 	if ENABLE_DEBUG {
 		log.KDebugLn("Added new domain with pid ", d.pid)
 	}
-	if currentDomain == nil || currentThread == nil {
-		currentDomain = allDomains.head
-		currentThread = currentDomain.runningThreads.thread
+	if CurrentDomain == nil || CurrentThread == nil {
+		CurrentDomain = allDomains.head
+		CurrentThread = CurrentDomain.runningThreads.thread
 	}
 }
 
-func ExitDomain(d *domain) {
+func ExitDomain(d *Domain) {
 	allDomains.Remove(d)
 
 	if allDomains.head == nil {
-		currentDomain = nil
+		CurrentDomain = nil
 	}
 
 	// clean up memory
 	scheduleStackArg(func(dom uintptr) {
-		doma := (*domain)(unsafe.Pointer(dom))
+		doma := (*Domain)(unsafe.Pointer(dom))
 		cleanUpDomain(doma)
 	}, (uintptr)(unsafe.Pointer(d)))
 }
 
 // Execute on scheduleStack
-func cleanUpDomain(d *domain) {
+func cleanUpDomain(d *Domain) {
 	// Clean up threads
 	for cur := d.runningThreads.thread; d.runningThreads.thread != nil; cur = d.runningThreads.thread {
 		//log.KDebugln("Clean up thread ", cur.tid)
@@ -78,18 +78,18 @@ func cleanUpDomain(d *domain) {
 }
 
 // Execute on scheduleStack
-func cleanUpThread(t *thread) {
+func cleanUpThread(t *Thread) {
 	// TODO; Adjust when thread control block is no longer a single page
 	threadPtr := (uintptr)(unsafe.Pointer(t))
 	threadDomain := t.domain
 	threadDomain.MemorySpace.UnmapPage(t.kernelStack.lo)
 	threadDomain.MemorySpace.UnmapPage(threadPtr)
-	if currentThread == t {
-		currentThread = nil
+	if CurrentThread == t {
+		CurrentThread = nil
 	}
 }
 
-func ExitThread(t *thread) {
+func ExitThread(t *Thread) {
 	if t.domain.numThreads <= 1 {
 		// we're last thread
 		ExitDomain(t.domain) // does not return
@@ -99,13 +99,13 @@ func ExitThread(t *thread) {
 		log.KDebugLn("Removing thread ", t.tid, " from domain ", t.domain.pid)
 	}
 	scheduleStackArg(func(threadPtr uintptr) {
-		thread := (*thread)(unsafe.Pointer(threadPtr))
+		thread := (*Thread)(unsafe.Pointer(threadPtr))
 		cleanUpThread(thread)
 		Schedule()
 	}, (uintptr)(unsafe.Pointer(t)))
 }
 
-func BlockThread(t *thread) {
+func BlockThread(t *Thread) {
 	t.isBlocked = true
 	t.domain.runningThreads.Dequeue(t)
 	t.domain.blockedThreads.Enqueue(t)
@@ -119,14 +119,14 @@ func Block() {
 	waitForInterrupt()
 }
 
-func ResumeThread(t *thread) {
+func ResumeThread(t *Thread) {
 	t.isBlocked = false
 	t.domain.blockedThreads.Dequeue(t)
 	t.domain.runningThreads.Enqueue(t)
 }
 
 func Schedule() {
-	if currentDomain == nil {
+	if CurrentDomain == nil {
 		log.KErrorLn("No Domains to schedule")
 		Shutdown()
 		// DisableInterrupts()
@@ -134,7 +134,7 @@ func Schedule() {
 	}
 	//log.KDebug("Scheduling in ")
 	//printTid(defaultLogWriter, currentThread)
-	nextDomain := currentDomain.next
+	nextDomain := CurrentDomain.next
 	newThread := nextDomain.runningThreads.Next()
 	if newThread == nil {
 		for newDomain := nextDomain.next; newDomain != nextDomain; newDomain = newDomain.next {
@@ -168,8 +168,8 @@ func Schedule() {
 	}
 
 	kernelHlt = false
-	currentDomain = nextDomain
-	if newThread == currentThread {
+	CurrentDomain = nextDomain
+	if newThread == CurrentThread {
 		return
 	}
 
@@ -179,22 +179,22 @@ func Schedule() {
 	//printTid(defaultLogWriter, currentThread)
 }
 
-func switchToThread(t *thread) {
+func switchToThread(t *Thread) {
 	// Save state of current thread
-	if currentThread != nil {
-		addr := uintptr(unsafe.Pointer(&(currentThread.fpState)))
+	if CurrentThread != nil {
+		addr := uintptr(unsafe.Pointer(&(CurrentThread.fpState)))
 		offset := 16 - (addr % 16)
-		currentThread.fpOffset = offset
+		CurrentThread.fpOffset = offset
 
 		backupFpRegs(addr + offset)
 	}
 
 	// Load next thread
 	//log.KDebugln("Switching to domain pid", currentDomain.pid, " and thread ", t.tid)
-	currentThread = t
+	CurrentThread = t
 
-	addr := uintptr(unsafe.Pointer(&(currentThread.fpState)))
-	offset := currentThread.fpOffset
+	addr := uintptr(unsafe.Pointer(&(CurrentThread.fpState)))
+	offset := CurrentThread.fpOffset
 	if offset != 0xffffffff {
 		if (addr+offset)%16 != 0 {
 			log.KPrintLn(addr, " ", offset)

@@ -1,10 +1,10 @@
 package kernel
 
-type thread struct {
-	next *thread
-	prev *thread
+type Thread struct {
+	next *Thread
+	prev *Thread
 
-	domain      *domain
+	domain      *Domain
 	tid         uint32
 	userStack   stack
 	kernelStack stack
@@ -37,10 +37,10 @@ type thread struct {
 }
 
 type threadList struct {
-	thread *thread
+	thread *Thread
 }
 
-func (l *threadList) Next() *thread {
+func (l *threadList) Next() *Thread {
 	if l.thread == nil {
 		return nil
 	}
@@ -48,7 +48,7 @@ func (l *threadList) Next() *thread {
 	return l.thread
 }
 
-func (l *threadList) Enqueue(t *thread) {
+func (l *threadList) Enqueue(t *Thread) {
 	if l.thread == nil {
 		l.thread = t
 		t.next = t
@@ -61,7 +61,7 @@ func (l *threadList) Enqueue(t *thread) {
 	}
 }
 
-func (l *threadList) Dequeue(t *thread) {
+func (l *threadList) Dequeue(t *Thread) {
 	if t == l.thread && t.next == t {
 		l.thread = nil
 	} else if t == l.thread {

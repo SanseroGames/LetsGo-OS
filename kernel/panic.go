@@ -13,8 +13,8 @@ func do_kernelPanic(caller uintptr, msg string) {
 	log.KErrorLn("\n", msg, " - kernel panic :(")
 	log.KPrint("Called from function: ")
 	printFuncName(caller - 4) // account for the fact that caller points to the instruction after the call
-	if currentThread != nil {
-		panicHelper(currentThread)
+	if CurrentThread != nil {
+		panicHelper(CurrentThread)
 	} else {
 		log.KErrorLn("Cannot print registers. 'currentThread' is nil")
 	}
@@ -23,7 +23,7 @@ func do_kernelPanic(caller uintptr, msg string) {
 	// does not return
 }
 
-func panicHelper(thread *thread) {
+func panicHelper(thread *Thread) {
 	log.KPrintLn("Domain ID: ", thread.domain.pid, ", Thread ID: ", thread.tid)
 	log.KPrintLn("Program name: ", thread.domain.programName)
 	if thread.isKernelInterrupt {
@@ -37,7 +37,7 @@ func panicHelper(thread *thread) {
 	Hlt()
 }
 
-func printThreadRegisters(t *thread) {
+func printThreadRegisters(t *Thread) {
 	log.KPrint("User regs:          Kernel regs:\n")
 	f := runtimeFindFunc(uintptr(t.kernelInfo.EIP))
 	log.KPrint("EIP: ", t.info.EIP, "      ", "EIP: ", t.kernelInfo.EIP, " ", f._Func().Name(), "\n")

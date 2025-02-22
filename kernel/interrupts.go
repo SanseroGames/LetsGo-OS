@@ -59,7 +59,7 @@ var (
 	idtDescriptor   IdtDescriptor = IdtDescriptor{}
 	handlers        [256]InterruptHandler
 	PerformSchedule = false
-	oldThread       *thread
+	oldThread       *Thread
 )
 
 func interrupt_debug(args ...interface{}) {
@@ -128,31 +128,31 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 
 	if info.CS == KCS_SELECTOR {
 		// We were interrupting the kernel
-		currentThread.kernelInfo = info
-		currentThread.kernelRegs = regs
-		currentThread.isKernelInterrupt = true
-		currentThread.interruptedKernelEIP = info.EIP
-		currentThread.interruptedKernelESP = info.ESP
+		CurrentThread.kernelInfo = info
+		CurrentThread.kernelRegs = regs
+		CurrentThread.isKernelInterrupt = true
+		CurrentThread.interruptedKernelEIP = info.EIP
+		CurrentThread.interruptedKernelESP = info.ESP
 		// Disable interrupts for interrupted kernel threads
-		currentThread.kernelInfo.EFLAGS &= 0xffffffff ^ EFLAGS_IF
+		CurrentThread.kernelInfo.EFLAGS &= 0xffffffff ^ EFLAGS_IF
 
 	} else {
-		if regs.KernelESP > uint32(currentThread.kernelStack.hi) ||
-			regs.KernelESP < uint32(currentThread.kernelStack.lo) {
+		if regs.KernelESP > uint32(CurrentThread.kernelStack.hi) ||
+			regs.KernelESP < uint32(CurrentThread.kernelStack.lo) {
 			log.KErrorLn("kernel stack for process is out of range")
-			log.KPrintLn("KernelESP: ", uintptr(regs.KernelESP), " Stack Hi: ", currentThread.kernelStack.hi, " Stack Low: ", currentThread.kernelStack.lo)
+			log.KPrintLn("KernelESP: ", uintptr(regs.KernelESP), " Stack Hi: ", CurrentThread.kernelStack.hi, " Stack Low: ", CurrentThread.kernelStack.lo)
 			log.KPrintLn(" TSS ESP0: ", tss.esp0)
 			kernelPanic("Fix pls")
 		}
-		currentThread.info = info
-		currentThread.regs = regs
-		currentThread.isKernelInterrupt = false
+		CurrentThread.info = info
+		CurrentThread.regs = regs
+		CurrentThread.isKernelInterrupt = false
 	}
 
 	interrupt_debug("[INTERRUPT-IN] Debug infos")
 	if PRINT_INTERRUPT_DEBUG {
-		printTid(currentThread)
-		printThreadRegisters(currentThread)
+		printTid(CurrentThread)
+		printThreadRegisters(CurrentThread)
 	}
 
 	handlers[info.InterruptNumber]()
@@ -176,24 +176,24 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 
 	interrupt_debug("[INTERRUPT-OUT] Debug infos")
 	if PRINT_INTERRUPT_DEBUG {
-		printTid(currentThread)
-		printThreadRegisters(currentThread)
+		printTid(CurrentThread)
+		printThreadRegisters(CurrentThread)
 	}
 
-	if currentThread.isKernelInterrupt {
+	if CurrentThread.isKernelInterrupt {
 		// We were interrupting the kernel
-		info = currentThread.kernelInfo
-		regs = currentThread.kernelRegs
-		info.EIP = currentThread.interruptedKernelEIP
-		info.ESP = currentThread.interruptedKernelESP
-		currentThread.isKernelInterrupt = false
+		info = CurrentThread.kernelInfo
+		regs = CurrentThread.kernelRegs
+		info.EIP = CurrentThread.interruptedKernelEIP
+		info.ESP = CurrentThread.interruptedKernelESP
+		CurrentThread.isKernelInterrupt = false
 		interrupt_debug("Kernel return")
 	} else {
-		info = currentThread.info
-		regs = currentThread.regs
-		currentThread.isKernelInterrupt = false
-		SetInterruptStack(currentThread.kernelStack.hi)
-		switchPageDir(currentThread.domain.MemorySpace.PageDirectory)
+		info = CurrentThread.info
+		regs = CurrentThread.regs
+		CurrentThread.isKernelInterrupt = false
+		SetInterruptStack(CurrentThread.kernelStack.hi)
+		switchPageDir(CurrentThread.domain.MemorySpace.PageDirectory)
 		interrupt_debug("User return")
 	}
 	interrupt_debug("[INTERRUPT-OUT] Returning to ", info.EIP, " with stack ", uintptr(info.ESP))
@@ -209,8 +209,8 @@ func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8
 
 func defaultHandler() {
 	log.KErrorLn("\nUnhandled interrupt! Disabling Interrupt and halting!")
-	log.KPrintLn("Interrupt number: ", currentThread.info.InterruptNumber)
-	log.KPrintLn("Exception code: ", uintptr(currentThread.info.ExceptionCode))
+	log.KPrintLn("Interrupt number: ", CurrentThread.info.InterruptNumber)
+	log.KPrintLn("Exception code: ", uintptr(CurrentThread.info.ExceptionCode))
 	kernelPanic("fix pls")
 }
 

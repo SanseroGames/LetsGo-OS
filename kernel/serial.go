@@ -10,7 +10,7 @@ const (
 )
 
 var (
-	serialDevice UARTSerialDevice
+	SerialDevice UARTSerialDevice
 )
 
 type UARTSerialDevice struct {
@@ -85,8 +85,8 @@ func (d *UARTSerialDevice) Initialize() syscall.Errno {
 }
 
 func InitSerialDevice() {
-	serialDevice = UARTSerialDevice{BasePort: COM1_PORT}
-	err := serialDevice.Initialize()
+	SerialDevice = UARTSerialDevice{BasePort: COM1_PORT}
+	err := SerialDevice.Initialize()
 	if err != ESUCCESS {
 		kernelPanic("Could not initialize serial device")
 	}

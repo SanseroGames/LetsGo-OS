@@ -47,7 +47,7 @@ func getCurrentPageDir() *mm.PageTable
 func getPageFaultAddr() uint32
 
 func pageFaultHandler() {
-	code := currentThread.info.ExceptionCode
+	code := CurrentThread.info.ExceptionCode
 	log.KErrorLn("\nPage Fault! Disabling Interrupt and halting!")
 	log.KPrintLn("Exception code: ", uintptr(code))
 	log.KPrintLn("Present: ", (code&PAGE_FAULT_PRESENT)>>(PAGE_FAULT_PRESENT>>1),

@@ -60,7 +60,7 @@ func textModeCheckFbMove() {
 	}
 }
 
-func textModePrintLnCol(s string, attr uint8) {
+func TextModePrintLnCol(s string, attr uint8) {
 	for _, b := range s {
 		textModePrintCharCol(uint8(b), attr)
 	}

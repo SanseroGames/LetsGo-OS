@@ -2,8 +2,8 @@ package kernel
 
 import "github.com/sanserogames/letsgo-os/kernel/mm"
 
-type domain struct {
-	next *domain
+type Domain struct {
+	next *Domain
 
 	pid        uint32
 	numThreads uint32
@@ -18,7 +18,7 @@ type domain struct {
 	programName string
 }
 
-func (d *domain) AddThread(t *thread) {
+func (d *Domain) AddThread(t *Thread) {
 	t.domain = d
 	t.next = nil
 	t.prev = nil
@@ -28,7 +28,7 @@ func (d *domain) AddThread(t *thread) {
 	d.numThreads++
 }
 
-func (d *domain) RemoveThread(t *thread) {
+func (d *Domain) RemoveThread(t *Thread) {
 	if t.domain != d {
 		return
 	}
@@ -42,11 +42,11 @@ func (d *domain) RemoveThread(t *thread) {
 }
 
 type domainList struct {
-	head *domain
-	tail *domain
+	head *Domain
+	tail *Domain
 }
 
-func (l *domainList) Append(domain *domain) {
+func (l *domainList) Append(domain *Domain) {
 	if domain == nil {
 		return
 	}
@@ -63,7 +63,7 @@ func (l *domainList) Append(domain *domain) {
 	largestPid++
 }
 
-func (l *domainList) Remove(d *domain) {
+func (l *domainList) Remove(d *Domain) {
 	if d == l.head {
 		if d == l.tail {
 			l.head = nil
