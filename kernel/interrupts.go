@@ -200,6 +200,11 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 
 }
 
+func printTid(t *Thread) {
+	log.KPrintLn("Pid: ", t.domain.pid, ", Tid: ", t.tid)
+}
+
+
 func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8) {
 	handlers[irq] = f
 	idtTable[irq].selector = uint16(selector)

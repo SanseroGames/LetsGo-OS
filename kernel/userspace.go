@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"path"
 	"runtime"
 	"unsafe"
 
@@ -112,6 +113,18 @@ var (
 // Don't forget to multiply by 8. it is not array index.
 func flushTss(segmentIndex int)
 
+func printFuncName(pc uintptr) {
+	f := runtimeFindFunc(pc)
+	if !f.valid() {
+		log.KPrintLn("func: ", pc)
+		return
+	}
+	s := f._Func().Name()
+	file, line := f._Func().FileLine(pc)
+	_, filename := path.Split(file)
+	log.KPrintLn(s, " (", filename, ":", line, ")")
+}
+
 func KernelThreadInit() {
 	SetInterruptStack(CurrentThread.kernelStack.hi)
 	switchPageDir(CurrentThread.domain.MemorySpace.PageDirectory)
@@ -219,7 +232,7 @@ func StartProgram(path string, outDomain *Domain, outMainThread *Thread) int {
 	nrVec += nrVec % 2
 	vecByteSize := nrVec * int(unsafe.Sizeof(aux[0]))
 
-	stack := utils.UIntToSlice[uint32](stackPages[0], PAGE_SIZE/4)	
+	stack := utils.UIntToSlice[uint32](stackPages[0], PAGE_SIZE/4)
 	for i, n := range aux[:nrVec] {
 		index := PAGE_SIZE/4 - 1 - vecByteSize/4 + i*2
 		stack[index] = n.Type

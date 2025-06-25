@@ -349,6 +349,14 @@ func linuxSyscallHandler() {
 	CurrentThread.regs.EAX = ret
 }
 
+func cstring(ptr uintptr) string {
+	var n int
+	for p := ptr; *(*byte)(unsafe.Pointer(p)) != 0; p++ {
+		n++
+	}
+	return unsafe.String((*byte)(unsafe.Pointer(ptr)), n)
+}
+
 func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	arr := args.arg1
 	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(arr))
