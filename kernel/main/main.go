@@ -5,12 +5,13 @@ package main
 
 import (
 	"io"
-	"unsafe"
+	_ "unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel"
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
 	"github.com/sanserogames/letsgo-os/kernel/panic"
+	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
 // This method will be linked in the kernel
@@ -88,10 +89,10 @@ func kmain(info *kernel.MultibootInfo, stackstart uintptr, stackend uintptr) {
 	for i := 0; i < len(progs); i++ {
 		newDomainMem := mm.AllocPage()
 		mm.Memclr(newDomainMem, mm.PAGE_SIZE)
-		newDomain := (*kernel.Domain)(unsafe.Pointer(newDomainMem))
+		newDomain := utils.UIntToPointer[kernel.Domain](newDomainMem)
 		newThreadMem := mm.AllocPage()
 		mm.Memclr(newThreadMem, mm.PAGE_SIZE)
-		newThread := (*kernel.Thread)(unsafe.Pointer(newThreadMem))
+		newThread := utils.UIntToPointer[kernel.Thread](newThreadMem)
 		err = kernel.StartProgram(progs[i], newDomain, newThread)
 		if err != 0 {
 			panic.KernelPanic("Could not start program")

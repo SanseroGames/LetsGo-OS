@@ -6,6 +6,7 @@ import (
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
+	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
 type auxVecEntry struct {
@@ -131,7 +132,7 @@ func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uin
 	if moduleLen < 4 {
 		return nil, 0, 0, nil
 	}
-	elfData := unsafe.Slice((*byte)(unsafe.Pointer(uintptr(module.Start))), moduleLen)
+	elfData := utils.UIntToSlice[byte](uintptr(module.Start), moduleLen)
 
 	// Test if really elf file
 	if elfData[0] != 0x7f || elfData[1] != 'E' || elfData[2] != 'L' || elfData[3] != 'F' {
@@ -139,7 +140,7 @@ func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uin
 		return nil, 0, 0, nil
 	}
 
-	elfHeader := (*elf.Header32)(unsafe.Pointer(uintptr(module.Start)))
+	elfHeader := utils.UIntToPointer[elf.Header32](uintptr(module.Start))
 
 	progHeaders := unsafe.Slice((*elf.Prog32)(unsafe.Add(unsafe.Pointer(uintptr(module.Start)), elfHeader.Phoff)), elfHeader.Phnum)
 
@@ -158,7 +159,7 @@ func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uin
 			if offset != 0 {
 				p := mm.AllocPage()
 				mm.Memclr(p, PAGE_SIZE)
-				target := unsafe.Slice((*byte)(unsafe.Pointer(p)), PAGE_SIZE)
+				target := utils.UIntToSlice[byte](p, PAGE_SIZE)
 
 				end := int(PAGE_SIZE - offset)
 				if end > len(contents) {
@@ -172,7 +173,7 @@ func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uin
 			for i := start; i < header.Filesz; i += PAGE_SIZE {
 				p := mm.AllocPage()
 				mm.Memclr(p, PAGE_SIZE)
-				target := unsafe.Slice((*byte)(unsafe.Pointer(p)), PAGE_SIZE)
+				target := utils.UIntToSlice[byte](p, PAGE_SIZE)
 
 				end := int(i + PAGE_SIZE)
 				if end > len(contents) {

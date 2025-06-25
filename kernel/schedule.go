@@ -5,6 +5,7 @@ import (
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
+	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
 type stack struct {
@@ -48,7 +49,7 @@ func ExitDomain(d *Domain) {
 
 	// clean up memory
 	scheduleStackArg(func(dom uintptr) {
-		doma := (*Domain)(unsafe.Pointer(dom))
+		doma := utils.UIntToPointer[Domain](dom)
 		cleanUpDomain(doma)
 	}, (uintptr)(unsafe.Pointer(d)))
 }
@@ -99,7 +100,7 @@ func ExitThread(t *Thread) {
 		log.KDebugLn("Removing thread ", t.tid, " from domain ", t.domain.pid)
 	}
 	scheduleStackArg(func(threadPtr uintptr) {
-		thread := (*Thread)(unsafe.Pointer(threadPtr))
+		thread := utils.UIntToPointer[Thread](threadPtr)
 		cleanUpThread(thread)
 		Schedule()
 	}, (uintptr)(unsafe.Pointer(t)))

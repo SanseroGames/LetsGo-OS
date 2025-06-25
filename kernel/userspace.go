@@ -6,6 +6,7 @@ import (
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
+	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
 type _func struct {
@@ -218,7 +219,7 @@ func StartProgram(path string, outDomain *Domain, outMainThread *Thread) int {
 	nrVec += nrVec % 2
 	vecByteSize := nrVec * int(unsafe.Sizeof(aux[0]))
 
-	stack := (*[1 << 15]uint32)(unsafe.Pointer(stackPages[0]))[:PAGE_SIZE/4]
+	stack := utils.UIntToSlice[uint32](stackPages[0], PAGE_SIZE/4)	
 	for i, n := range aux[:nrVec] {
 		index := PAGE_SIZE/4 - 1 - vecByteSize/4 + i*2
 		stack[index] = n.Type
