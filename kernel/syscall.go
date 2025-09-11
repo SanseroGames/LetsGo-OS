@@ -368,18 +368,18 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	// Create new domain
 	newDomainMem := mm.AllocPage()
-	mm.Memclr(newDomainMem, PAGE_SIZE)
-	newDomain := (*Domain)(unsafe.Pointer(newDomainMem))
+	newDomainMem.Clear()
+	newDomain := (*Domain)(newDomainMem.Pointer())
 	newThreadMem := mm.AllocPage()
-	mm.Memclr(newThreadMem, PAGE_SIZE)
-	newThread := (*Thread)(unsafe.Pointer(newThreadMem))
+	newThreadMem.Clear()
+	newThread := (*Thread)(newThreadMem.Pointer())
 	err := StartProgram(pathname, newDomain, newThread)
 	if err != 0 {
-		mm.FreePage(newDomainMem)
-		mm.FreePage(newThreadMem)
+		mm.FreePage(newDomainMem.Address())
+		mm.FreePage(newThreadMem.Address())
 		return 0, syscall.ENOENT
 	}
-	newDomain.MemorySpace.MapPage(newThreadMem, newThreadMem, PAGE_RW|PAGE_PERM_KERNEL)
+	newDomain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), PAGE_RW|PAGE_PERM_KERNEL)
 	AddDomain(newDomain)
 
 	if !CurrentThread.isFork {
@@ -503,10 +503,10 @@ func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	flags := args.arg1
 	stack := args.arg2
 	newThreadMem := mm.AllocPage()
-	mm.Memclr(newThreadMem, PAGE_SIZE)
-	newThread := (*Thread)(unsafe.Pointer(newThreadMem))
+	newThreadMem.Clear()
+	newThread := (*Thread)(newThreadMem.Pointer())
 	CreateNewThread(newThread, uintptr(stack), CurrentThread, CurrentThread.domain)
-	CurrentThread.domain.MemorySpace.MapPage(newThreadMem, newThreadMem, PAGE_RW|PAGE_PERM_KERNEL)
+	CurrentThread.domain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), PAGE_RW|PAGE_PERM_KERNEL)
 	if flags&_CLONE_THREAD == 0 {
 		// This is probably temporary as I don't want to implement COW right now to create a new process
 		log.KDebugLn("[CLONE SYSCALL] Clone where the goal is not a thread does not behave like on linux")
@@ -560,11 +560,11 @@ func linuxBrkSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	//text_mode_print_hex32(brk)
 	for i := (brk + PAGE_SIZE - 1) &^ (PAGE_SIZE - 1); i < newBrk; i += PAGE_SIZE {
 		p := mm.AllocPage()
-		mm.Memclr(p, PAGE_SIZE)
+		p.Clear()
 		flags := uint8(PAGE_PERM_USER | PAGE_RW)
 		// log.KDebugln("[brk] Map page ", i, " -> ", p)
 
-		CurrentThread.domain.MemorySpace.MapPage(p, i, flags)
+		CurrentThread.domain.MemorySpace.MapPage(p.Address(), i, flags)
 	}
 	CurrentThread.domain.MemorySpace.Brk = newBrk
 	// log.KDebugln("BRK: ", newBrk)
@@ -601,7 +601,7 @@ func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	for i := startAddr; i < startAddr+size; i += PAGE_SIZE {
 		p := mm.AllocPage()
-		mm.Memclr(p, PAGE_SIZE)
+		p.Clear()
 		pageFlags := uint8(PAGE_PERM_USER)
 		if prot&MMAP_PROT_WRITE == MMAP_PROT_WRITE {
 			pageFlags |= PAGE_RW
@@ -616,7 +616,7 @@ func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
 				kernelPanic("Trying to map page which is already present without MAP_FIXED")
 			}
 		} else {
-			CurrentThread.domain.MemorySpace.MapPage(p, i, pageFlags)
+			CurrentThread.domain.MemorySpace.MapPage(p.Address(), i, pageFlags)
 		}
 	}
 

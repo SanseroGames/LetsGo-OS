@@ -148,16 +148,16 @@ func CreateNewThread(outThread *Thread, newStack uintptr, cloneThread *Thread, t
 		log.KDebugLn("thread stack ", kernelStack)
 	}
 
-	mm.Memclr(kernelStack, PAGE_SIZE)
-	outThread.kernelStack.lo = kernelStack
-	outThread.kernelStack.hi = kernelStack + PAGE_SIZE
+	kernelStack.Clear()
+	outThread.kernelStack.lo = kernelStack.Address()
+	outThread.kernelStack.hi = kernelStack.Address() + PAGE_SIZE
 	outThread.kernelInfo.ESP = uint32(outThread.kernelStack.hi)
 	outThread.kernelInfo.EIP = hackyGetFuncAddr(KernelThreadInit)
 	outThread.kernelInfo.CS = KCS_SELECTOR
 	outThread.kernelInfo.SS = KDS_SELECTOR
 	outThread.kernelRegs.GS = KGS_SELECTOR
 	outThread.kernelInfo.EFLAGS = EFLAGS_R
-	targetDomain.MemorySpace.MapPage(kernelStack, kernelStack, PAGE_RW|PAGE_PERM_KERNEL)
+	targetDomain.MemorySpace.MapPage(kernelStack.Address(), kernelStack.Address(), PAGE_RW|PAGE_PERM_KERNEL)
 
 	outThread.info.CS = defaultUserSegments.cs | 3
 	outThread.info.SS = defaultUserSegments.ss | 3
@@ -220,9 +220,9 @@ func StartProgram(path string, outDomain *Domain, outMainThread *Thread) int {
 	var stackPages [defaultStackPages]uintptr
 	for i := 0; i < defaultStackPages; i++ {
 		stack := mm.AllocPage()
-		mm.Memclr(stack, PAGE_SIZE)
-		outDomain.MemorySpace.MapPage(stack, defaultStackStart-uintptr((i+1)*PAGE_SIZE), PAGE_RW|PAGE_PERM_USER)
-		stackPages[i] = stack
+		stack.Clear()
+		outDomain.MemorySpace.MapPage(stack.Address(), defaultStackStart-uintptr((i+1)*PAGE_SIZE), PAGE_RW|PAGE_PERM_USER)
+		stackPages[i] = stack.Address()
 	}
 
 	CreateNewThread(outMainThread, defaultStackStart, nil, outDomain)

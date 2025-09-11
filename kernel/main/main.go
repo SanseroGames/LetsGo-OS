@@ -11,13 +11,9 @@ import (
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
 	"github.com/sanserogames/letsgo-os/kernel/panic"
-	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
-// This method will be linked in the kernel
 func main()
-
-
 
 var progs = [...]string{
 	// "/usr/cread",
@@ -36,7 +32,6 @@ var progs = [...]string{
 var debugWriters = []io.Writer{&kernel.SerialDevice}
 var errorWriters = []io.Writer{&kernel.SerialDevice, kernel.TextModeErrorWriter{}}
 var logWriters = []io.Writer{&kernel.SerialDevice, kernel.TextModeWriter{}}
-
 
 //go:linkname kmain main.main
 func kmain(info *kernel.MultibootInfo, stackstart uintptr, stackend uintptr) {
@@ -88,16 +83,16 @@ func kmain(info *kernel.MultibootInfo, stackstart uintptr, stackend uintptr) {
 	var err int
 	for i := 0; i < len(progs); i++ {
 		newDomainMem := mm.AllocPage()
-		mm.Memclr(newDomainMem, mm.PAGE_SIZE)
-		newDomain := utils.UIntToPointer[kernel.Domain](newDomainMem)
+		newDomainMem.Clear()
+		newDomain := (*kernel.Domain)(newDomainMem.Pointer())
 		newThreadMem := mm.AllocPage()
-		mm.Memclr(newThreadMem, mm.PAGE_SIZE)
-		newThread := utils.UIntToPointer[kernel.Thread](newThreadMem)
+		newThreadMem.Clear()
+		newThread := (*kernel.Thread)(newThreadMem.Pointer())
 		err = kernel.StartProgram(progs[i], newDomain, newThread)
 		if err != 0 {
 			panic.KernelPanic("Could not start program")
 		}
-		newDomain.MemorySpace.MapPage(newThreadMem, newThreadMem, mm.PAGE_RW|mm.PAGE_PERM_KERNEL)
+		newDomain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), mm.PAGE_RW|mm.PAGE_PERM_KERNEL)
 		kernel.AddDomain(newDomain)
 	}
 

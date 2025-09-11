@@ -6,7 +6,6 @@ import (
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
-	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
 const (
@@ -72,8 +71,8 @@ func pageFaultHandler() {
 func CreateNewPageDirectory() mm.MemSpace {
 	var ret mm.MemSpace
 	addr := mm.AllocPage()
-	mm.Memclr(addr, PAGE_SIZE)
-	ret.PageDirectory = utils.UIntToPointer[mm.PageTable](addr)
+	addr.Clear()
+	ret.PageDirectory = (*mm.PageTable)(addr.Pointer())
 	for i := uint64(KERNEL_START); i < KERNEL_RESERVED; i += PAGE_SIZE {
 		ret.TryMapPage(uintptr(i), uintptr(i), PAGE_RW|PAGE_PERM_KERNEL)
 	}
@@ -108,8 +107,8 @@ func InitPaging() {
 	maxPages = -mm.AllocatedPages
 	mm.AllocatedPages = 0
 	addr := mm.AllocPage()
-	mm.Memclr(addr, PAGE_SIZE)
-	kernelPageDirectory := utils.UIntToPointer[mm.PageTable](addr)
+	addr.Clear()
+	kernelPageDirectory := (*mm.PageTable)(addr.Pointer())
 	kernelMemSpace.PageDirectory = kernelPageDirectory
 	// printPageTable(kernelPageDirectory, 0, 1024)
 

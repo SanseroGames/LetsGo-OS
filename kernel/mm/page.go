@@ -8,9 +8,22 @@ import (
 	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
-
 type page struct {
 	next *page
+}
+
+type Page []byte
+
+func (page Page) Clear() {
+	clear(page)
+}
+
+func (page Page) Address() uintptr {
+	return (uintptr)(page.Pointer())
+}
+
+func (page Page) Pointer() unsafe.Pointer {
+	return unsafe.Pointer(unsafe.SliceData(page))
 }
 
 var freePagesList *page
@@ -18,8 +31,8 @@ var AllocatedPages int = 0
 
 func FreePage(addr uintptr) {
 	if addr%PAGE_SIZE != 0 {
-		log.KDebugLn("[PAGE] WARNING: freeingPage but is not page aligned: ", addr)
-		return
+		log.KDebugLn("[PAGE] WARNING: freeing Page but is not page aligned: ", addr)
+		panic.KernelPanic("[Page] non-aligned page")
 	}
 	// Just to check for immediate double free
 	// If I were to check for double freeing correctly I would have to traverse the list
@@ -34,7 +47,7 @@ func FreePage(addr uintptr) {
 	AllocatedPages--
 }
 
-func AllocPage() uintptr {
+func AllocPage() Page {
 	if freePagesList == nil {
 		panic.KernelPanic("[PAGE] Out of pages to allocate")
 	}
@@ -44,13 +57,14 @@ func AllocPage() uintptr {
 	if PAGE_DEBUG {
 		log.KDebugLn("[PAGE]: Allocated ", unsafe.Pointer(p))
 	}
-	return uintptr(unsafe.Pointer(p))
+	return unsafe.Slice((*byte)(unsafe.Pointer(p)), PAGE_SIZE)
 }
 
 func Memclr(p uintptr, n int) {
 	// s := (*(*[1 << 30]byte)(unsafe.Pointer(p)))[:n]
-	s := utils.UIntToSlice[byte](p,n)
-	for i := range s {
-		s[i] = 0
-	}
+	s := utils.UIntToSlice[byte](p, n)
+	clear(s)
+	// for i := range s {
+	// 	s[i] = 0
+	// }
 }

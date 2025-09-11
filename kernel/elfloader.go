@@ -157,23 +157,21 @@ func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uin
 			offset := header.Vaddr & (PAGE_SIZE - 1)
 			start := uint32(0)
 			if offset != 0 {
-				p := mm.AllocPage()
-				mm.Memclr(p, PAGE_SIZE)
-				target := utils.UIntToSlice[byte](p, PAGE_SIZE)
+				target := mm.AllocPage()
+				target.Clear()
 
 				end := int(PAGE_SIZE - offset)
 				if end > len(contents) {
 					end = len(contents)
 				}
 				copy(target[offset:PAGE_SIZE], contents[0:end])
-				space.MapPage(p, uintptr(header.Vaddr&^(PAGE_SIZE-1)), PAGE_RW|PAGE_PERM_USER)
+				space.MapPage(target.Address(), uintptr(header.Vaddr&^(PAGE_SIZE-1)), PAGE_RW|PAGE_PERM_USER)
 				localTop = header.Vaddr&^(PAGE_SIZE-1) + PAGE_SIZE
 				start = PAGE_SIZE - offset
 			}
 			for i := start; i < header.Filesz; i += PAGE_SIZE {
-				p := mm.AllocPage()
-				mm.Memclr(p, PAGE_SIZE)
-				target := utils.UIntToSlice[byte](p, PAGE_SIZE)
+				target := mm.AllocPage()
+				target.Clear()
 
 				end := int(i + PAGE_SIZE)
 				if end > len(contents) {
@@ -181,14 +179,14 @@ func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uin
 				}
 				copy(target, contents[i:end])
 				// Currently don't care about write protecton of code
-				space.MapPage(p, uintptr(header.Vaddr+i), PAGE_RW|PAGE_PERM_USER)
+				space.MapPage(target.Address(), uintptr(header.Vaddr+i), PAGE_RW|PAGE_PERM_USER)
 				localTop = header.Vaddr + i + PAGE_SIZE
 			}
 			if header.Filesz < header.Memsz {
 				for i := localTop; i < header.Vaddr+header.Memsz; i += PAGE_SIZE {
 					p := mm.AllocPage()
-					mm.Memclr(p, PAGE_SIZE)
-					space.MapPage(p, uintptr(i), PAGE_RW|PAGE_PERM_USER)
+					p.Clear()
+					space.MapPage(p.Address(), uintptr(i), PAGE_RW|PAGE_PERM_USER)
 					localTop = i + PAGE_SIZE
 				}
 			}

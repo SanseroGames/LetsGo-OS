@@ -29,10 +29,10 @@ func (m *MemSpace) getPageTable(virtAddr uintptr) *PageTable {
 	if !e.IsPresent() {
 		// No page table present
 		addr := AllocPage()
-		Memclr(addr, PAGE_SIZE)
+		addr.Clear()
 		// User perm here to allow all entries in page table to be possibly accessed by
 		// user. User does not have access to page table though.
-		m.PageDirectory.SetEntry(virtAddr>>10, addr, PAGE_PRESENT|PAGE_RW|PAGE_PERM_USER)
+		m.PageDirectory.SetEntry(virtAddr>>10, addr.Address(), PAGE_PRESENT|PAGE_RW|PAGE_PERM_USER)
 
 	}
 
