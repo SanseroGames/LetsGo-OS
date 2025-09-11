@@ -1,7 +1,7 @@
 package mm
 
 import (
-	"github.com/sanserogames/letsgo-os/kernel/utils"
+	"unsafe"
 )
 
 const (
@@ -48,10 +48,10 @@ func (e PageTableEntry) IsUserAccessible() bool {
 	return e&PAGE_PERM_USER > 0
 }
 
-func (e PageTableEntry) GetPhysicalAddress() uintptr {
-	return uintptr(e &^ (PAGE_SIZE - 1))
+func (e PageTableEntry) GetPhysicalAddress() unsafe.Pointer {
+	return unsafe.Pointer(uintptr(e &^ (PAGE_SIZE - 1)))
 }
 
 func (e PageTableEntry) AsPageTable() *PageTable {
-	return utils.UIntToPointer[PageTable](e.GetPhysicalAddress())
+	return (*PageTable)(e.GetPhysicalAddress())
 }

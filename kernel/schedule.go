@@ -75,7 +75,7 @@ func cleanUpDomain(d *Domain) {
 		log.KDebugLn("Allocated pages ", mm.AllocatedPages, " (out of", maxPages, ")")
 	}
 	Schedule()
-	mm.FreePage((uintptr)(unsafe.Pointer(d)))
+	mm.FreePage(unsafe.Pointer(d))
 }
 
 // Execute on scheduleStack

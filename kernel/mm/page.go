@@ -8,8 +8,8 @@ import (
 	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
-type page struct {
-	next *page
+type pageList struct {
+	next *pageList
 }
 
 type Page []byte
@@ -26,22 +26,22 @@ func (page Page) Pointer() unsafe.Pointer {
 	return unsafe.Pointer(unsafe.SliceData(page))
 }
 
-var freePagesList *page
+var freePagesList *pageList
 var AllocatedPages int = 0
 
-func FreePage(addr uintptr) {
-	if addr%PAGE_SIZE != 0 {
-		log.KDebugLn("[PAGE] WARNING: freeing Page but is not page aligned: ", addr)
+func FreePage(pageAddr unsafe.Pointer) {
+	if uintptr(pageAddr)%PAGE_SIZE != 0 {
+		log.KDebugLn("[PAGE] WARNING: freeing Page but is not page aligned: ", pageAddr)
 		panic.KernelPanic("[Page] non-aligned page")
 	}
 	// Just to check for immediate double free
 	// If I were to check for double freeing correctly I would have to traverse the list
 	// every time completely but that would make freeing O(n)
-	if addr == uintptr(unsafe.Pointer(freePagesList)) {
-		log.KDebugLn("[Page] immediate double freeing page ", addr)
+	if pageAddr == unsafe.Pointer(freePagesList) {
+		log.KDebugLn("[Page] immediate double freeing page ", pageAddr)
 		panic.KernelPanic("[Page] double freeing page")
 	}
-	p := utils.UIntToPointer[page](addr)
+	p := (*pageList)(pageAddr)
 	p.next = freePagesList
 	freePagesList = p
 	AllocatedPages--

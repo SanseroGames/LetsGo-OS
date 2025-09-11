@@ -181,5 +181,5 @@ func (m *MemSpace) FreeAllPages() {
 		tableEntry.UnsetPresent()
 		FreePage(tableEntry.GetPhysicalAddress())
 	}
-	FreePage(uintptr(unsafe.Pointer(m.PageDirectory)))
+	FreePage(unsafe.Pointer(m.PageDirectory))
 }

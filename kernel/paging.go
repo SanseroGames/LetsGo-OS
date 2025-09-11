@@ -100,7 +100,7 @@ func InitPaging() {
 			startAddr = KERNEL_RESERVED
 		}
 		for i := startAddr; i < uintptr(p.BaseAddr+p.Length); i += PAGE_SIZE {
-			mm.FreePage(i)
+			mm.FreePage(unsafe.Pointer(i))
 		}
 	}
 
