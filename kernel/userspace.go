@@ -8,7 +8,6 @@ import (
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
-	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
 type _func struct {
@@ -236,12 +235,12 @@ func startProgramInternal(module *MultibootModule, outDomain *Domain, outMainThr
 	outDomain.programName = module.Cmdline()
 	outDomain.MemorySpace.Brk = topAddr
 
-	var stackPages [defaultStackPages]uintptr
+	var stackPages [defaultStackPages]mm.Page
 	for i := 0; i < defaultStackPages; i++ {
 		stack := mm.AllocPage()
 		stack.Clear()
 		outDomain.MemorySpace.MapPage(stack.Address(), defaultStackStart-uintptr((i+1)*PAGE_SIZE), PAGE_RW|PAGE_PERM_USER)
-		stackPages[i] = stack.Address()
+		stackPages[i] = stack
 	}
 
 	CreateNewThread(outMainThread, defaultStackStart, nil, outDomain)
@@ -251,15 +250,14 @@ func startProgramInternal(module *MultibootModule, outDomain *Domain, outMainThr
 	nrVec += nrVec % 2
 	vecByteSize := nrVec * int(unsafe.Sizeof(aux[0]))
 
-	stack := utils.UIntToSlice[uint32](stackPages[0], PAGE_SIZE/4)
-	for i, n := range aux[:nrVec] {
-		index := PAGE_SIZE/4 - 1 - vecByteSize/4 + i*2
-		stack[index] = n.Type
-		stack[index+1] = n.Value
-	}
+	auxVectorBytes := stackPages[0][len(stackPages[0])-4-vecByteSize : len(stackPages[0])-4]
+	auxVector := unsafe.Slice((*auxVecEntry)(unsafe.Pointer(unsafe.SliceData(auxVectorBytes))), len(auxVectorBytes)/int(unsafe.Sizeof(aux[0])))
+
+	copy(auxVector, aux[:nrVec])
+
 	outMainThread.info.EIP = uintptr(elfHdr.Entry)
 	// outMainThread.info.ESP = uint32(defaultStackStart) - 4 /* null aux vector */ - uint32(vecByteSize) - 4 /* env pointers */ - 4 /* arg pointer */ - 4 /* arg count */
-	outMainThread.info.ESP = uint32(defaultStackStart) - 4 - uint32(vecByteSize) - 4 - 4 - 4
+	outMainThread.info.ESP = uint32(defaultStackStart) - 4 /* null aux vector */ - uint32(len(auxVectorBytes)) - 4 /* env pointers */ - 4 /* arg pointer */ - 4 /* arg count */
 	return ESUCCESS
 }
 
