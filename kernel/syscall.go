@@ -693,34 +693,27 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EBADF
 	}
 
-	if !CurrentThread.domain.MemorySpace.IsRangeAccessible(arr, arr+uintptr(count*8)) { // todo: sizeof?
-		return 0, syscall.EFAULT
+	if count <= 0 {
+		return 0, syscall.EINVAL
 	}
 
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(arr)
-	if !ok {
-		log.KErrorLn("Could not look up string addr")
-		return 0, syscall.EFAULT
+	processed := 0
+	printed := uint32(0)
+	for item, err := range mm.IterateUserSpaceType[ioVec](arr, &CurrentDomain.MemorySpace) {
+		if err != ESUCCESS {
+			return 0, err
+		}
+		written, err := writeSyscallWriteData(fd, item.iovBase, item.iovLen)
+		if err != ESUCCESS {
+			return 0, err
+		}
+		printed += written
+		processed++
+		if processed == int(count) {
+			break
+		}
 	}
-	iovecs := unsafe.Slice((*ioVec)(unsafe.Pointer(addr)), count)
-	printed := 0
-	for _, n := range iovecs {
-		if !CurrentThread.domain.MemorySpace.IsRangeAccessible(uintptr(n.iovBase), uintptr(n.iovBase)+uintptr(n.iovLen)) {
-			return 0, syscall.EFAULT
-		}
-		addr, ok = CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(n.iovBase))
-		if !ok {
-			return 0, syscall.EFAULT
-		}
-		s := unsafe.String((*byte)(unsafe.Pointer(uintptr(addr))), n.iovLen)
-		if fd == 2 {
-			log.KError(s)
-		} else {
-			log.KPrint(s)
-		}
-		printed += len(s)
-	}
-	return uint32(printed), ESUCCESS //TODO: Return number of bytes written
+	return printed, ESUCCESS
 }
 
 func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -733,7 +726,10 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	if fd < 1 || fd > 2 {
 		return 0, syscall.EBADF
 	}
+	return writeSyscallWriteData(fd, text, length)
+}
 
+func writeSyscallWriteData(fd uint32, text uintptr, length uint32) (uint32, syscall.Errno) {
 	var buf [100]byte
 
 	s := unsafe.String(&buf[0], len(buf))
@@ -742,7 +738,7 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	writeLen := uint32(0)
 	for value, err := range CurrentDomain.MemorySpace.IterateUserSpace(text) {
 		if err != ESUCCESS {
-			return writeLen, err
+			return 0, err
 		}
 		buf[index] = value
 		index++

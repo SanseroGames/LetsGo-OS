@@ -212,3 +212,31 @@ func (m *MemSpace) IterateUserSpace(startAt uintptr) iter.Seq2[byte, syscall.Err
 		yield(0, syscall.EFAULT)
 	}
 }
+
+func IterateUserSpaceType[T any](startAt uintptr, memSpace *MemSpace) iter.Seq2[T, syscall.Errno] {
+	return func(yield func(T, syscall.Errno) bool) {
+		var size T
+		var buf [100]byte
+		valueSize := unsafe.Sizeof(size)
+		if valueSize > uintptr(len(buf)) {
+			panic.KernelPanic("IterateUserSpaceType: Used too big data structure to read from userspace (bigger as buf)")
+		}
+		index := 0
+		for value, err := range memSpace.IterateUserSpace(startAt) {
+			if err != 0 {
+				yield(size, err)
+				return
+			}
+			buf[index] = value
+			index++
+			if index == int(valueSize) {
+				result := *(*T)(unsafe.Pointer(&buf))
+				if !yield(result, 0) {
+					return
+				}
+				index = 0
+			}
+		}
+
+	}
+}
