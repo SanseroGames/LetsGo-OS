@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # I could not figure out how to do this in the Makefile so I just call this script
 a=''
