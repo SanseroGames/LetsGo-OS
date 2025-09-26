@@ -734,23 +734,38 @@ func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EBADF
 	}
 
-	if !CurrentThread.domain.MemorySpace.IsRangeAccessible(text, text+uintptr(length)) {
-		return 0, syscall.EFAULT
-	}
+	var buf [100]byte
 
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(text)
-	if !ok {
-		log.KErrorLn("Could not look up string addr")
-		return 0, syscall.EFAULT
-	}
-	s := unsafe.String((*byte)(unsafe.Pointer(addr)), length)
+	s := unsafe.String(&buf[0], len(buf))
 
+	index := 0
+	writeLen := uint32(0)
+	for value, err := range CurrentDomain.MemorySpace.IterateUserSpace(text) {
+		if err != ESUCCESS {
+			return writeLen, err
+		}
+		buf[index] = value
+		index++
+		if index == len(buf) {
+			if fd == 2 {
+				log.KError(s)
+			} else {
+				log.KPrint(s)
+			}
+			index = 0
+		}
+		writeLen++
+		if writeLen == length {
+			break
+		}
+	}
+	rest := unsafe.String(&buf[0], index)
 	if fd == 2 {
-		log.KError(s)
+		log.KError(rest)
 	} else {
-		log.KPrint(s)
+		log.KPrint(rest)
 	}
-	return uint32(len(s)), ESUCCESS //TODO: nr of bytes written
+	return uint32(writeLen), ESUCCESS
 }
 
 func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
