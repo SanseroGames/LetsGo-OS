@@ -351,7 +351,8 @@ func linuxSyscallHandler() {
 }
 
 func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	arr := args.arg1
+	pathname := args.arg1
+	argv := args.arg2
 
 	// Create new domain
 	newDomainMem := mm.AllocPage()
@@ -360,7 +361,8 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	newThreadMem := mm.AllocPage()
 	newThreadMem.Clear()
 	newThread := (*Thread)(newThreadMem.Pointer())
-	err := StartProgramUsr(uintptr(arr), newDomain, newThread)
+
+	err := StartProgramUsr(uintptr(pathname), uintptr(argv), newDomain, newThread)
 	if err != ESUCCESS {
 		mm.FreePage(newDomainMem.Pointer())
 		mm.FreePage(newThreadMem.Pointer())

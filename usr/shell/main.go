@@ -9,12 +9,12 @@ import (
 	"unsafe"
 )
 
-func exit_shell(){
+func exitShell() {
 	fmt.Println("")
 	os.Exit(0)
 }
 
-func read_line() []byte {
+func readLine() []byte {
 	var inputBuf []byte = make([]byte, 1)
 	var input_line []byte = make([]byte, 0, 20)
 
@@ -22,7 +22,7 @@ func read_line() []byte {
 		_, err := os.Stdin.Read(inputBuf)
 
 		if err == io.EOF {
-			exit_shell()
+			exitShell()
 		}
 
 		input := inputBuf[0]
@@ -37,7 +37,7 @@ func read_line() []byte {
 			fmt.Print("^")
 			input = '['
 		case 0x4:
-			exit_shell()
+			exitShell()
 		}
 
 		if input == '\b' {
@@ -67,27 +67,39 @@ func read_line() []byte {
 func main() {
 	for {
 		fmt.Print("> ")
-		line := read_line()
-		if len(line) == 0 {
+		line := readLine()
+		args := bytes.Fields(line)
+		if len(args) == 0 {
 			continue
 		}
 
-		if bytes.EqualFold(line, []byte("exit")) {
-			exit_shell()
+		cmd := args[0]
+
+		if bytes.EqualFold(cmd, []byte("exit")) {
+			exitShell()
 		}
 
-		if line[0] != '/' {
-			line = append([]byte("/usr/"), line...)
+		binPath := cmd
+		if cmd[0] != '/' {
+			binPath = append([]byte("/usr/"), cmd...)
 		}
+
+		argv := make([]uintptr, len(args)+1)
+		for i := 0; i < len(args); i++ {
+			arg := args[i]
+			arg = append(arg, 0)
+			argv[i] = uintptr(unsafe.Pointer(&arg[0]))
+		}
+		argv[len(args)] = 0
 
 		r, _, _ := syscall.RawSyscall(syscall.SYS_EXECVE,
-			uintptr(unsafe.Pointer(&line[0])),
-			uintptr(unsafe.Pointer(nil)),
+			uintptr(unsafe.Pointer(&binPath[0])),
+			uintptr(unsafe.Pointer(&argv[0])),
 			uintptr(unsafe.Pointer(nil)))
 
 		pid := int(r)
 		if pid <= 0 {
-			fmt.Printf("Command not found: %s\n", line)
+			fmt.Printf("Command not found: %s\n", cmd)
 		} else {
 			syscall.Wait4(pid, nil, 0, nil)
 		}

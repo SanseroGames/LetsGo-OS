@@ -204,19 +204,19 @@ func StartProgram(path string, outDomain *Domain, outMainThread *Thread) syscall
 		log.KErrorLn("Could not load elf file")
 		return err
 	}
-	return startProgramInternal(module, outDomain, outMainThread)
+	return startProgramInternal(module, 0, outDomain, outMainThread)
 }
 
-func StartProgramUsr(path uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
+func StartProgramUsr(path uintptr, argv uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
 	module, err := FindMultibootModuleUsr(path)
 	if err != ESUCCESS {
 		log.KErrorLn("Could not load elf file")
 		return err
 	}
-	return startProgramInternal(module, outDomain, outMainThread)
+	return startProgramInternal(module, argv, outDomain, outMainThread)
 }
 
-func startProgramInternal(module *MultibootModule, outDomain *Domain, outMainThread *Thread) syscall.Errno {
+func startProgramInternal(module *MultibootModule, argv uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
 	if outDomain == nil || outMainThread == nil {
 		log.KErrorLn("Cannot start program. Please allocate the memory for me")
 		return syscall.ENOMEM
@@ -245,19 +245,67 @@ func startProgramInternal(module *MultibootModule, outDomain *Domain, outMainThr
 
 	CreateNewThread(outMainThread, defaultStackStart, nil, outDomain)
 
+	argcOffset := 0
+	argpOffset := argcOffset + 4
+
+	// For now restrict process env to single page
+	argPage := stackPages[0]
+	argPageUintPtr := unsafe.Slice((*uintptr)(argPage.Pointer()), (PAGE_SIZE)/4)
+	argOffset := PAGE_SIZE
+	pointerPage := argPageUintPtr[argpOffset/4:]
+	pointerOffset := 0
+	argCount := 0
+	if argv != 0 {
+		for argPointer, err := range mm.IterateUserSpaceType[uintptr](argv, &CurrentDomain.MemorySpace) {
+			if err != ESUCCESS {
+				outDomain.MemorySpace.FreeAllPages()
+				return err
+			}
+			// get arg length
+			// get slice on argPAge
+			// copy data
+			//
+			if argPointer == 0 {
+				break
+			}
+			argLength := 0
+			for value, err := range CurrentDomain.MemorySpace.IterateUserSpace(argPointer) {
+				if err != ESUCCESS {
+					outDomain.MemorySpace.FreeAllPages()
+					return err
+				}
+				argLength++
+				if value == 0 {
+					break
+				}
+			}
+			argSlice := argPage[argOffset-argLength : argOffset]
+			CurrentDomain.MemorySpace.ReadBytesFromUserSpace(argPointer, argSlice)
+			argOffset = argOffset - argLength
+
+			// TODO: Check that it wont overlap
+			argCount++
+			pointerPage[pointerOffset] = defaultStackStart - PAGE_SIZE + uintptr(argOffset)
+			pointerOffset++
+		}
+	}
+	argPageUintPtr[argcOffset/4] = uintptr(argCount)
+
 	var aux [32]auxVecEntry
 	nrVec := LoadAuxVector(aux[:], elfHdr, loadAddr)
 	nrVec += nrVec % 2
 	vecByteSize := nrVec * int(unsafe.Sizeof(aux[0]))
 
-	auxVectorBytes := stackPages[0][len(stackPages[0])-4-vecByteSize : len(stackPages[0])-4]
+	envpOffset := argpOffset + (argCount+1)*4
+	auxOffset := envpOffset + ( /*envpCount + */ 1)*4
+
+	auxVectorBytes := argPage[auxOffset : auxOffset+vecByteSize]
 	auxVector := unsafe.Slice((*auxVecEntry)(unsafe.Pointer(unsafe.SliceData(auxVectorBytes))), len(auxVectorBytes)/int(unsafe.Sizeof(aux[0])))
 
 	copy(auxVector, aux[:nrVec])
 
 	outMainThread.info.EIP = uintptr(elfHdr.Entry)
-	// outMainThread.info.ESP = uint32(defaultStackStart) - 4 /* null aux vector */ - uint32(vecByteSize) - 4 /* env pointers */ - 4 /* arg pointer */ - 4 /* arg count */
-	outMainThread.info.ESP = uint32(defaultStackStart) - 4 /* null aux vector */ - uint32(len(auxVectorBytes)) - 4 /* env pointers */ - 4 /* arg pointer */ - 4 /* arg count */
+	outMainThread.info.ESP = uint32(defaultStackStart) - PAGE_SIZE
 	return ESUCCESS
 }
 

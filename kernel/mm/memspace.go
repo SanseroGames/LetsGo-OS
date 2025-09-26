@@ -185,6 +185,22 @@ func (m *MemSpace) FreeAllPages() {
 	FreePage(unsafe.Pointer(m.PageDirectory))
 }
 
+func (m *MemSpace) ReadBytesFromUserSpace(startAddr uintptr, buffer []byte) syscall.Errno {
+
+	count := 0
+	for value, err := range m.IterateUserSpace(startAddr) {
+		if count >= len(buffer) {
+			break
+		}
+		if err != 0 {
+			return err
+		}
+		buffer[count] = value
+		count++
+	}
+	return 0
+}
+
 func (m *MemSpace) IterateUserSpace(startAt uintptr) iter.Seq2[byte, syscall.Errno] {
 	return func(yield func(byte, syscall.Errno) bool) {
 		if !m.IsAddressAccessible(startAt) {
