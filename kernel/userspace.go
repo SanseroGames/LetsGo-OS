@@ -3,6 +3,7 @@ package kernel
 import (
 	"path"
 	"runtime"
+	"syscall"
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
@@ -198,21 +199,39 @@ func CreateNewThread(outThread *Thread, newStack uintptr, cloneThread *Thread, t
 }
 
 // Need pointer as this function should not do any memory allocations
-func StartProgram(path string, outDomain *Domain, outMainThread *Thread) int {
+func StartProgram(path string, outDomain *Domain, outMainThread *Thread) syscall.Errno {
+	module, err := FindMultibootModule(path)
+	if err != ESUCCESS {
+		log.KErrorLn("Could not load elf file")
+		return err
+	}
+	return startProgramInternal(module, outDomain, outMainThread)
+}
+
+func StartProgramUsr(path uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
+	module, err := FindMultibootModuleUsr(path)
+	if err != ESUCCESS {
+		log.KErrorLn("Could not load elf file")
+		return err
+	}
+	return startProgramInternal(module, outDomain, outMainThread)
+}
+
+func startProgramInternal(module *MultibootModule, outDomain *Domain, outMainThread *Thread) syscall.Errno {
 	if outDomain == nil || outMainThread == nil {
 		log.KErrorLn("Cannot start program. Please allocate the memory for me")
-		return 1
+		return syscall.ENOMEM
 	}
 	outDomain.Segments = defaultUserSegments
 	outDomain.MemorySpace = CreateNewPageDirectory()
 
-	elfHdr, loadAddr, topAddr, module := LoadElfFile(path, &outDomain.MemorySpace)
+	elfHdr, loadAddr, topAddr, err := LoadElfFile(module, &outDomain.MemorySpace)
 
-	if elfHdr == nil || module == nil {
+	if err != ESUCCESS {
 		outDomain.MemorySpace.FreeAllPages()
 		// Assumption: LoadElfFile cannot fail if it started allocating pages
 		log.KErrorLn("Could not load elf file")
-		return 2
+		return err
 	}
 	outDomain.programName = module.Cmdline()
 	outDomain.MemorySpace.Brk = topAddr
@@ -239,8 +258,9 @@ func StartProgram(path string, outDomain *Domain, outMainThread *Thread) int {
 		stack[index+1] = n.Value
 	}
 	outMainThread.info.EIP = uintptr(elfHdr.Entry)
+	// outMainThread.info.ESP = uint32(defaultStackStart) - 4 /* null aux vector */ - uint32(vecByteSize) - 4 /* env pointers */ - 4 /* arg pointer */ - 4 /* arg count */
 	outMainThread.info.ESP = uint32(defaultStackStart) - 4 - uint32(vecByteSize) - 4 - 4 - 4
-	return 0
+	return ESUCCESS
 }
 
 func InitUserMode(kernelStackStart uintptr, kernelStackEnd uintptr) { // Add usermode code segment

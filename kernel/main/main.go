@@ -5,6 +5,7 @@ package main
 
 import (
 	"io"
+	"syscall"
 	_ "unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel"
@@ -80,8 +81,8 @@ func kmain(info *kernel.MultibootInfo, stackstart uintptr, stackend uintptr) {
 	log.KDebugLn("Initialization complete")
 	//HdReadSector()
 
-	var err int
-	for i := 0; i < len(progs); i++ {
+	var err syscall.Errno
+	for i := range len(progs) {
 		newDomainMem := mm.AllocPage()
 		newDomainMem.Clear()
 		newDomain := (*kernel.Domain)(newDomainMem.Pointer())

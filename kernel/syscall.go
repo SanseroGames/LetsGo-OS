@@ -6,6 +6,7 @@ import (
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
+	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
 const PRINT_SYSCALL = ENABLE_DEBUG
@@ -349,22 +350,8 @@ func linuxSyscallHandler() {
 	CurrentThread.regs.EAX = ret
 }
 
-func cstring(ptr uintptr) string {
-	var n int
-	for p := ptr; *(*byte)(unsafe.Pointer(p)) != 0; p++ {
-		n++
-	}
-	return unsafe.String((*byte)(unsafe.Pointer(ptr)), n)
-}
-
 func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	arr := args.arg1
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(arr))
-	if !ok {
-		log.KErrorLn("Could not look up string pathname")
-		return 0, syscall.EFAULT
-	}
-	pathname := cstring(addr)
 
 	// Create new domain
 	newDomainMem := mm.AllocPage()
@@ -373,11 +360,11 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	newThreadMem := mm.AllocPage()
 	newThreadMem.Clear()
 	newThread := (*Thread)(newThreadMem.Pointer())
-	err := StartProgram(pathname, newDomain, newThread)
-	if err != 0 {
-		mm.FreePage(newDomainMem.Address())
-		mm.FreePage(newThreadMem.Address())
-		return 0, syscall.ENOENT
+	err := StartProgramUsr(uintptr(arr), newDomain, newThread)
+	if err != ESUCCESS {
+		mm.FreePage(newDomainMem.Pointer())
+		mm.FreePage(newThreadMem.Pointer())
+		return 0, err
 	}
 	newDomain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), PAGE_RW|PAGE_PERM_KERNEL)
 	AddDomain(newDomain)
@@ -663,7 +650,7 @@ func linuxOpenSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	if !ok {
 		return 0, syscall.EFAULT
 	}
-	s := cstring(addr)
+	s := utils.CString(addr)
 	if PRINT_SYSCALL {
 		log.KDebugLn("[SYS-OPEN] ", s)
 	}
@@ -681,7 +668,7 @@ func linuxOpenAtSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	if !ok {
 		return 0, syscall.EFAULT
 	}
-	s1 := cstring(pathaddr)
+	s1 := utils.CString(pathaddr)
 	if PRINT_SYSCALL {
 		log.KDebugLn("[SYS-OPENAT] fd:", fd)
 		log.KDebugLn("[SYS-OPENAT] path:", s1)

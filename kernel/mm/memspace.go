@@ -1,6 +1,8 @@
 package mm
 
 import (
+	"iter"
+	"syscall"
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
@@ -147,8 +149,7 @@ func (m *MemSpace) GetPhysicalAddress(virtAddr uintptr) (uintptr, bool) {
 }
 
 func (m *MemSpace) IsAddressAccessible(virtAddr uintptr) bool {
-	pt := m.getPageTable(virtAddr)
-	e := pt.GetEntry(virtAddr)
+	e := m.GetPageTableEntry(virtAddr)
 	return e.IsPresent() && e.IsUserAccessible()
 }
 
@@ -182,4 +183,32 @@ func (m *MemSpace) FreeAllPages() {
 		FreePage(tableEntry.GetPhysicalAddress())
 	}
 	FreePage(unsafe.Pointer(m.PageDirectory))
+}
+
+func (m *MemSpace) IterateUserSpace(startAt uintptr) iter.Seq2[byte, syscall.Errno] {
+	return func(yield func(byte, syscall.Errno) bool) {
+		if !m.IsAddressAccessible(startAt) {
+			yield(0, syscall.EFAULT)
+			return
+		}
+
+		startOffset := (startAt & (PAGE_SIZE - 1))
+
+		for currentPage := startAt & (^uintptr(0) ^ (PAGE_SIZE - 1)); currentPage != 0; currentPage += PAGE_SIZE {
+			physicalPage, accessible := m.GetPhysicalAddress(currentPage)
+			if !(accessible) {
+				yield(0, syscall.EFAULT)
+				return
+			}
+			for currentOffset := startOffset; currentOffset < PAGE_SIZE; currentOffset++ {
+				value := *(*byte)(unsafe.Pointer(physicalPage | currentOffset))
+				if !yield(value, 0) {
+					return
+				}
+			}
+			startOffset = 0
+		}
+
+		yield(0, syscall.EFAULT)
+	}
 }

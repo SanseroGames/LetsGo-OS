@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"debug/elf"
+	"syscall"
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
@@ -113,31 +114,53 @@ func LoadAuxVector(buf []auxVecEntry, elfHdr *elf.Header32, loadAddr uintptr) in
 	return start
 }
 
-func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uintptr, uintptr, *MultibootModule) {
-	var module *MultibootModule
+func FindMultibootModule(multibootModuleName string) (*MultibootModule, syscall.Errno) {
 	loadedModuleSlice := loadedModules[:]
 	for idx, loadedModule := range loadedModuleSlice {
-		if loadedModule.Cmdline() == multibootModule {
-			module = &loadedModuleSlice[idx]
-			break
+		if loadedModule.Cmdline() == multibootModuleName {
+			return &loadedModuleSlice[idx], ESUCCESS
 		}
 	}
+	return nil, syscall.ENOENT
+}
 
-	if module == nil || module.Cmdline() != multibootModule {
-		log.KErrorLn("[ELF] Unknown module: ", multibootModule)
-		return nil, 0, 0, nil
+func FindMultibootModuleUsr(multibootModuleName uintptr) (*MultibootModule, syscall.Errno) {
+	// Since we have no filesystem, I expect module names not to be that long. Just load it into a buffer so I can string compare
+	var buf [100]byte
+	idx := 0
+	for value, err := range CurrentDomain.MemorySpace.IterateUserSpace(multibootModuleName) {
+		if err != ESUCCESS {
+			return nil, err
+		}
+		buf[idx] = value
+		if value == 0 {
+			break
+		}
+		idx++
+		if idx == len(buf) {
+			return nil, syscall.ENAMETOOLONG
+		}
 	}
+	return FindMultibootModule(unsafe.String(&buf[0], idx))
+}
+
+func LoadElfFile(module *MultibootModule, space *mm.MemSpace) (*elf.Header32, uintptr, uintptr, syscall.Errno) {
+	if module == nil {
+		log.KErrorLn("[ELF] Unknown module")
+		return nil, 0, 0, syscall.ENOENT
+	}
+
 	moduleLen := int(module.End - module.Start)
 	// catch weird things...
 	if moduleLen < 4 {
-		return nil, 0, 0, nil
+		return nil, 0, 0, syscall.ENOEXEC
 	}
 	elfData := utils.UIntToSlice[byte](uintptr(module.Start), moduleLen)
 
 	// Test if really elf file
 	if elfData[0] != 0x7f || elfData[1] != 'E' || elfData[2] != 'L' || elfData[3] != 'F' {
-		log.KErrorLn("[ELF] '", multibootModule, "' is not a ELF file")
-		return nil, 0, 0, nil
+		log.KErrorLn("[ELF] Module '", module.Cmdline(), "' is not a ELF file")
+		return nil, 0, 0, syscall.ENOEXEC
 	}
 
 	elfHeader := utils.UIntToPointer[elf.Header32](uintptr(module.Start))
@@ -196,6 +219,6 @@ func LoadElfFile(multibootModule string, space *mm.MemSpace) (*elf.Header32, uin
 
 		}
 	}
-	return elfHeader, baseAddr, uintptr(topAddr), module
+	return elfHeader, baseAddr, uintptr(topAddr), ESUCCESS
 
 }
