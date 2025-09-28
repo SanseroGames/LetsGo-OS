@@ -20,7 +20,7 @@ type taskswitchbuf struct {
 var (
 	CurrentThread  *Thread    = &scheduleThread
 	CurrentDomain  *Domain    = nil
-	allDomains     domainList = domainList{head: nil, tail: nil}
+	AllDomains     domainList = domainList{Head: nil, tail: nil}
 	largestPid     uint32     = 0x0
 	kernelHlt      bool       = false
 	scheduleThread Thread     = Thread{}
@@ -30,20 +30,20 @@ func backupFpRegs(buffer uintptr)
 func restoreFpRegs(buffer uintptr)
 
 func AddDomain(d *Domain) {
-	allDomains.Append(d)
+	AllDomains.Append(d)
 	if ENABLE_DEBUG {
-		log.KDebugLn("Added new domain with pid ", d.pid)
+		log.KDebugLn("Added new domain with pid ", d.Pid)
 	}
 	if CurrentDomain == nil || CurrentThread == nil {
-		CurrentDomain = allDomains.head
+		CurrentDomain = AllDomains.Head
 		CurrentThread = CurrentDomain.runningThreads.thread
 	}
 }
 
 func ExitDomain(d *Domain) {
-	allDomains.Remove(d)
+	AllDomains.Remove(d)
 
-	if allDomains.head == nil {
+	if AllDomains.Head == nil {
 		CurrentDomain = nil
 	}
 
@@ -82,7 +82,7 @@ func cleanUpDomain(d *Domain) {
 func cleanUpThread(t *Thread) {
 	// TODO; Adjust when thread control block is no longer a single page
 	threadPtr := (uintptr)(unsafe.Pointer(t))
-	threadDomain := t.domain
+	threadDomain := t.Domain
 	threadDomain.MemorySpace.UnmapPage(t.kernelStack.lo)
 	threadDomain.MemorySpace.UnmapPage(threadPtr)
 	if CurrentThread == t {
@@ -91,13 +91,13 @@ func cleanUpThread(t *Thread) {
 }
 
 func ExitThread(t *Thread) {
-	if t.domain.numThreads <= 1 {
+	if t.Domain.numThreads <= 1 {
 		// we're last thread
-		ExitDomain(t.domain) // does not return
+		ExitDomain(t.Domain) // does not return
 	}
-	t.domain.RemoveThread(t)
+	t.Domain.RemoveThread(t)
 	if ENABLE_DEBUG {
-		log.KDebugLn("Removing thread ", t.tid, " from domain ", t.domain.pid)
+		log.KDebugLn("Removing thread ", t.Tid, " from domain ", t.Domain.Pid)
 	}
 	scheduleStackArg(func(threadPtr uintptr) {
 		thread := utils.UIntToPointer[Thread](threadPtr)
@@ -107,9 +107,9 @@ func ExitThread(t *Thread) {
 }
 
 func BlockThread(t *Thread) {
-	t.isBlocked = true
-	t.domain.runningThreads.Dequeue(t)
-	t.domain.blockedThreads.Enqueue(t)
+	t.IsBlocked = true
+	t.Domain.runningThreads.Dequeue(t)
+	t.Domain.blockedThreads.Enqueue(t)
 	PerformSchedule = true
 }
 
@@ -121,9 +121,9 @@ func Block() {
 }
 
 func ResumeThread(t *Thread) {
-	t.isBlocked = false
-	t.domain.blockedThreads.Dequeue(t)
-	t.domain.runningThreads.Enqueue(t)
+	t.IsBlocked = false
+	t.Domain.blockedThreads.Dequeue(t)
+	t.Domain.runningThreads.Enqueue(t)
 }
 
 func Schedule() {
@@ -135,10 +135,10 @@ func Schedule() {
 	}
 	//log.KDebug("Scheduling in ")
 	//printTid(defaultLogWriter, currentThread)
-	nextDomain := CurrentDomain.next
+	nextDomain := CurrentDomain.Next
 	newThread := nextDomain.runningThreads.Next()
 	if newThread == nil {
-		for newDomain := nextDomain.next; newDomain != nextDomain; newDomain = newDomain.next {
+		for newDomain := nextDomain.Next; newDomain != nextDomain; newDomain = newDomain.Next {
 			newThread = newDomain.runningThreads.Next()
 			if newThread != nil {
 				break

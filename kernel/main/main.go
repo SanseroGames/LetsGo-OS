@@ -12,6 +12,7 @@ import (
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
 	"github.com/sanserogames/letsgo-os/kernel/panic"
+	kernelSyscall "github.com/sanserogames/letsgo-os/kernel/syscall"
 )
 
 func main()
@@ -61,7 +62,7 @@ func kmain(info *kernel.MultibootInfo, stackstart uintptr, stackend uintptr) {
 
 	kernel.InitInterrupts()
 
-	kernel.InitSyscall()
+	kernelSyscall.InitSyscall()
 
 	kernel.InitPIC()
 

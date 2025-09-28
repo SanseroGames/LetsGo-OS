@@ -1,29 +1,29 @@
 package kernel
 
 type Thread struct {
-	next *Thread
+	Next *Thread
 	prev *Thread
 
-	domain      *Domain
-	tid         uint32
+	Domain      *Domain
+	Tid         uint32
 	userStack   stack
 	kernelStack stack
 	isRemoved   bool
 	// Currently ignored '^^ I don't have to do it thanks to spurious wakeups
-	isBlocked   bool
-	waitAddress *uint32
+	IsBlocked   bool
+	WaitAddress *uint32
 
 	// flag that shows that this thread would be handled as a new process in linux
 	isFork bool
 
 	// Infos to stall a thread when switching
 	info InterruptInfo
-	regs RegisterState
+	Regs RegisterState
 
 	kernelInfo InterruptInfo
-	kernelRegs RegisterState
+	KernelRegs RegisterState
 
-	isKernelInterrupt    bool
+	IsKernelInterrupt    bool
 	interruptedKernelEIP uintptr
 	interruptedKernelESP uint32
 
@@ -44,31 +44,31 @@ func (l *threadList) Next() *Thread {
 	if l.thread == nil {
 		return nil
 	}
-	l.thread = l.thread.next
+	l.thread = l.thread.Next
 	return l.thread
 }
 
 func (l *threadList) Enqueue(t *Thread) {
 	if l.thread == nil {
 		l.thread = t
-		t.next = t
+		t.Next = t
 		t.prev = t
 	} else {
-		t.next = l.thread
+		t.Next = l.thread
 		t.prev = l.thread.prev
-		l.thread.prev.next = t
+		l.thread.prev.Next = t
 		l.thread.prev = t
 	}
 }
 
 func (l *threadList) Dequeue(t *Thread) {
-	if t == l.thread && t.next == t {
+	if t == l.thread && t.Next == t {
 		l.thread = nil
 	} else if t == l.thread {
-		l.thread = t.next
+		l.thread = t.Next
 	}
-	t.prev.next = t.next
-	t.next.prev = t.prev
-	t.next = nil
+	t.prev.Next = t.Next
+	t.Next.prev = t.prev
+	t.Next = nil
 	t.prev = nil
 }

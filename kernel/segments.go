@@ -202,7 +202,8 @@ func doUpdateSegment(index int, base uintptr, limit uintptr, access uint8, flags
 
 }
 
-func SetTlsSegment(index uint32, desc *UserDesc, table []GdtEntry) bool {
+func SetTlsSegment(index uint32, desc *UserDesc) bool {
+	table := CurrentThread.tlsSegments[:]
 	if index < TLS_START || index > uint32(len(gdtTable)) {
 		return false
 	}
@@ -231,6 +232,17 @@ func SetTlsSegment(index uint32, desc *UserDesc, table []GdtEntry) bool {
 	FlushTlsTable(table)
 
 	return true
+}
+
+func FindFreeTlsSlot() uint32 {
+	// Find free slot
+	for i := TLS_START; i < len(CurrentThread.tlsSegments); i++ {
+		if !CurrentThread.tlsSegments[i].IsPresent() {
+			return uint32(i)
+		}
+	}
+
+	return uint32(0xffffffff)
 }
 
 func FlushTlsTable(table []GdtEntry) {

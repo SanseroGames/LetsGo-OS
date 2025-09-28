@@ -129,8 +129,8 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 	if info.CS == KCS_SELECTOR {
 		// We were interrupting the kernel
 		CurrentThread.kernelInfo = info
-		CurrentThread.kernelRegs = regs
-		CurrentThread.isKernelInterrupt = true
+		CurrentThread.KernelRegs = regs
+		CurrentThread.IsKernelInterrupt = true
 		CurrentThread.interruptedKernelEIP = info.EIP
 		CurrentThread.interruptedKernelESP = info.ESP
 		// Disable interrupts for interrupted kernel threads
@@ -145,8 +145,8 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 			kernelPanic("Fix pls")
 		}
 		CurrentThread.info = info
-		CurrentThread.regs = regs
-		CurrentThread.isKernelInterrupt = false
+		CurrentThread.Regs = regs
+		CurrentThread.IsKernelInterrupt = false
 	}
 
 	interrupt_debug("[INTERRUPT-IN] Debug infos")
@@ -180,20 +180,20 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 		printThreadRegisters(CurrentThread)
 	}
 
-	if CurrentThread.isKernelInterrupt {
+	if CurrentThread.IsKernelInterrupt {
 		// We were interrupting the kernel
 		info = CurrentThread.kernelInfo
-		regs = CurrentThread.kernelRegs
+		regs = CurrentThread.KernelRegs
 		info.EIP = CurrentThread.interruptedKernelEIP
 		info.ESP = CurrentThread.interruptedKernelESP
-		CurrentThread.isKernelInterrupt = false
+		CurrentThread.IsKernelInterrupt = false
 		interrupt_debug("Kernel return")
 	} else {
 		info = CurrentThread.info
-		regs = CurrentThread.regs
-		CurrentThread.isKernelInterrupt = false
+		regs = CurrentThread.Regs
+		CurrentThread.IsKernelInterrupt = false
 		SetInterruptStack(CurrentThread.kernelStack.hi)
-		switchPageDir(CurrentThread.domain.MemorySpace.PageDirectory)
+		switchPageDir(CurrentThread.Domain.MemorySpace.PageDirectory)
 		interrupt_debug("User return")
 	}
 	interrupt_debug("[INTERRUPT-OUT] Returning to ", info.EIP, " with stack ", uintptr(info.ESP))
@@ -201,9 +201,8 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 }
 
 func printTid(t *Thread) {
-	log.KPrintLn("Pid: ", t.domain.pid, ", Tid: ", t.tid)
+	log.KPrintLn("Pid: ", t.Domain.Pid, ", Tid: ", t.Tid)
 }
-
 
 func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8) {
 	handlers[irq] = f

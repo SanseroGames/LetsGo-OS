@@ -10,6 +10,9 @@ import (
 	"github.com/sanserogames/letsgo-os/kernel/mm"
 )
 
+// TODO: Move somewhere else?
+const ESUCCESS = syscall.Errno(0)
+
 type _func struct {
 	entry   uintptr // start pc
 	nameoff int32   // function name
@@ -127,8 +130,8 @@ func printFuncName(pc uintptr) {
 
 func KernelThreadInit() {
 	SetInterruptStack(CurrentThread.kernelStack.hi)
-	switchPageDir(CurrentThread.domain.MemorySpace.PageDirectory)
-	JumpUserMode(CurrentThread.regs, CurrentThread.info)
+	switchPageDir(CurrentThread.Domain.MemorySpace.PageDirectory)
+	JumpUserMode(CurrentThread.Regs, CurrentThread.info)
 }
 
 func JumpUserMode(regs RegisterState, info InterruptInfo)
@@ -155,16 +158,16 @@ func CreateNewThread(outThread *Thread, newStack uintptr, cloneThread *Thread, t
 	outThread.kernelInfo.EIP = hackyGetFuncAddr(KernelThreadInit)
 	outThread.kernelInfo.CS = KCS_SELECTOR
 	outThread.kernelInfo.SS = KDS_SELECTOR
-	outThread.kernelRegs.GS = KGS_SELECTOR
+	outThread.KernelRegs.GS = KGS_SELECTOR
 	outThread.kernelInfo.EFLAGS = EFLAGS_R
 	targetDomain.MemorySpace.MapPage(kernelStack.Address(), kernelStack.Address(), PAGE_RW|PAGE_PERM_KERNEL)
 
 	outThread.info.CS = defaultUserSegments.cs | 3
 	outThread.info.SS = defaultUserSegments.ss | 3
-	outThread.regs.GS = defaultUserSegments.gs | 3
-	outThread.regs.FS = defaultUserSegments.fs | 3
-	outThread.regs.ES = defaultUserSegments.es | 3
-	outThread.regs.DS = defaultUserSegments.ds | 3
+	outThread.Regs.GS = defaultUserSegments.gs | 3
+	outThread.Regs.FS = defaultUserSegments.fs | 3
+	outThread.Regs.ES = defaultUserSegments.es | 3
+	outThread.Regs.DS = defaultUserSegments.ds | 3
 	outThread.info.EFLAGS = EFLAGS_R | EFLAGS_IF
 	if newStack != 0 {
 		outThread.userStack.hi = newStack
@@ -181,8 +184,8 @@ func CreateNewThread(outThread *Thread, newStack uintptr, cloneThread *Thread, t
 		outThread.info.SS = cloneThread.info.SS
 		outThread.info.EIP = cloneThread.info.EIP
 		outThread.info.EFLAGS = cloneThread.info.EFLAGS
-		outThread.regs = cloneThread.regs
-		outThread.regs.EAX = 0
+		outThread.Regs = cloneThread.Regs
+		outThread.Regs.EAX = 0
 		if newStack == 0 {
 			outThread.userStack.hi = cloneThread.userStack.hi
 			outThread.userStack.lo = cloneThread.userStack.lo
@@ -191,7 +194,7 @@ func CreateNewThread(outThread *Thread, newStack uintptr, cloneThread *Thread, t
 		//outThread.fpState = cloneThread.fpState
 		copy(outThread.tlsSegments[TLS_START:], cloneThread.tlsSegments[TLS_START:])
 	}
-	if outThread.next != nil || outThread.prev != nil {
+	if outThread.Next != nil || outThread.prev != nil {
 		kernelPanic("thread should not be in a list yet")
 	}
 	targetDomain.AddThread(outThread)
@@ -232,7 +235,7 @@ func startProgramInternal(module *MultibootModule, argv uintptr, outDomain *Doma
 		log.KErrorLn("Could not load elf file")
 		return err
 	}
-	outDomain.programName = module.Cmdline()
+	outDomain.ProgramName = module.Cmdline()
 	outDomain.MemorySpace.Brk = topAddr
 
 	var stackPages [defaultStackPages]mm.Page

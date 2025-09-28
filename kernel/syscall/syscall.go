@@ -1,15 +1,17 @@
-package kernel
+package syscall
 
 import (
 	"syscall"
 	"unsafe"
 
+	"github.com/sanserogames/letsgo-os/kernel"
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
+	"github.com/sanserogames/letsgo-os/kernel/panic"
 	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
-const PRINT_SYSCALL = ENABLE_DEBUG
+const PRINT_SYSCALL = kernel.ENABLE_DEBUG
 
 type ioVec struct {
 	iovBase uintptr /* Starting address */
@@ -188,14 +190,14 @@ func syscalltest(args syscallArgs) (uint32, syscall.Errno) {
 
 func RegisterSyscall(number int, name string, handler syscallHandler) {
 	if len(syscallList) == cap(syscallList) {
-		kernelPanic("Too many syscalls registered")
+		panic.KernelPanic("Too many syscalls registered")
 	}
 	syscallList = append(syscallList, syscallEntry{handler: handler, name: name, numberOfArgs: 0})
 	registeredSyscalls[number] = byte(len(syscallList)) // add 1 to distinguish uninitialized
 }
 
 func InitSyscall() {
-	SetInterruptHandler(0x80, linuxSyscallHandler, KCS_SELECTOR, PRIV_USER)
+	kernel.SetInterruptHandler(0x80, linuxSyscallHandler, kernel.KCS_SELECTOR, kernel.PRIV_USER)
 
 	// Somehow this does not work when written in the variables above
 	syscallList = syscallListRaw[:0]
@@ -262,41 +264,41 @@ func InitSyscall() {
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	return CurrentThread.tid, ESUCCESS
+	return kernel.CurrentThread.Tid, ESUCCESS
 }
 
 func getPidSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	return CurrentThread.domain.pid, ESUCCESS
+	return kernel.CurrentThread.Domain.Pid, ESUCCESS
 }
 
 func linuxSyscallHandler() {
 	var ret uint32 = 0
 	var err syscall.Errno = ESUCCESS
-	syscallNr := CurrentThread.regs.EAX
+	syscallNr := kernel.CurrentThread.Regs.EAX
 	args := syscallArgs{
-		arg1: CurrentThread.regs.EBX,
-		arg2: CurrentThread.regs.ECX,
-		arg3: CurrentThread.regs.EDX,
-		arg4: CurrentThread.regs.ESI,
-		arg5: CurrentThread.regs.EDI,
-		arg6: CurrentThread.regs.EBP,
+		arg1: kernel.CurrentThread.Regs.EBX,
+		arg2: kernel.CurrentThread.Regs.ECX,
+		arg3: kernel.CurrentThread.Regs.EDX,
+		arg4: kernel.CurrentThread.Regs.ESI,
+		arg5: kernel.CurrentThread.Regs.EDI,
+		arg6: kernel.CurrentThread.Regs.EBP,
 	}
-	if CurrentThread.isKernelInterrupt {
-		syscallNr = CurrentThread.kernelRegs.EAX
+	if kernel.CurrentThread.IsKernelInterrupt {
+		syscallNr = kernel.CurrentThread.KernelRegs.EAX
 		args = syscallArgs{
-			arg1: CurrentThread.kernelRegs.EBX,
-			arg2: CurrentThread.kernelRegs.ECX,
-			arg3: CurrentThread.kernelRegs.EDX,
-			arg4: CurrentThread.kernelRegs.ESI,
-			arg5: CurrentThread.kernelRegs.EDI,
-			arg6: CurrentThread.kernelRegs.EBP,
+			arg1: kernel.CurrentThread.KernelRegs.EBX,
+			arg2: kernel.CurrentThread.KernelRegs.ECX,
+			arg3: kernel.CurrentThread.KernelRegs.EDX,
+			arg4: kernel.CurrentThread.KernelRegs.ESI,
+			arg5: kernel.CurrentThread.KernelRegs.EDI,
+			arg6: kernel.CurrentThread.KernelRegs.EBP,
 		}
 		if syscallNr == syscall.SYS_WRITE {
 			// Write syscall. We probably upset the go runtime so it wants to complain
 			linuxWriteSyscall(args)
 		}
 		log.KPrintLn("\nkernel syscallnr: ", syscallNr)
-		kernelPanic("Why is the kernel making a syscall?")
+		panic.KernelPanic("Why is the kernel making a syscall?")
 	}
 	handlerIdx := registeredSyscalls[syscallNr]
 	if handlerIdx == 0 {
@@ -306,9 +308,9 @@ func linuxSyscallHandler() {
 	handler := syscallList[handlerIdx-1]
 	if PRINT_SYSCALL {
 		log.KDebugLn("pid: ",
-			CurrentThread.domain.pid,
+			kernel.CurrentThread.Domain.Pid,
 			" tid: ",
-			CurrentThread.tid,
+			kernel.CurrentThread.Tid,
 			" :: ",
 			handler.name,
 			" (",
@@ -334,9 +336,9 @@ func linuxSyscallHandler() {
 	ret, err = handler.handler(args)
 	if PRINT_SYSCALL {
 		log.KDebugLn("SYSCALL RETURN pid: ",
-			CurrentThread.domain.pid,
+			kernel.CurrentThread.Domain.Pid,
 			" tid: ",
-			CurrentThread.tid,
+			kernel.CurrentThread.Tid,
 			" :: ",
 			ret,
 			" (",
@@ -347,7 +349,7 @@ func linuxSyscallHandler() {
 	if err != ESUCCESS {
 		ret = ^uint32(err) + 1
 	}
-	CurrentThread.regs.EAX = ret
+	kernel.CurrentThread.Regs.EAX = ret
 }
 
 func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -357,31 +359,31 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	// Create new domain
 	newDomainMem := mm.AllocPage()
 	newDomainMem.Clear()
-	newDomain := (*Domain)(newDomainMem.Pointer())
+	newDomain := (*kernel.Domain)(newDomainMem.Pointer())
 	newThreadMem := mm.AllocPage()
 	newThreadMem.Clear()
-	newThread := (*Thread)(newThreadMem.Pointer())
+	newThread := (*kernel.Thread)(newThreadMem.Pointer())
 
-	err := StartProgramUsr(uintptr(pathname), uintptr(argv), newDomain, newThread)
+	err := kernel.StartProgramUsr(uintptr(pathname), uintptr(argv), newDomain, newThread)
 	if err != ESUCCESS {
 		mm.FreePage(newDomainMem.Pointer())
 		mm.FreePage(newThreadMem.Pointer())
 		return 0, err
 	}
-	newDomain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), PAGE_RW|PAGE_PERM_KERNEL)
-	AddDomain(newDomain)
+	newDomain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), kernel.PAGE_RW|kernel.PAGE_PERM_KERNEL)
+	kernel.AddDomain(newDomain)
 
-	if !CurrentThread.isFork {
-		// We were not in a fork, so the process should be replaced
-		// We simulate this by just exiting the current process
-		//kernelPanic("Execve in non fork thread")
-		//ExitDomain(currentThread.domain)
-	} else {
-		ExitThread(CurrentThread)
-	}
-	PerformSchedule = true
-	// return currentThread.regs.EAX, ESUCCESS
-	return newDomain.pid, ESUCCESS
+	// if !kernel.CurrentThread.isFork {
+	// 	// We were not in a fork, so the process should be replaced
+	// 	// We simulate this by just exiting the current process
+	// 	//panic.KernelPanic("Execve in non fork thread")
+	// 	//ExitDomain(kernel.CurrentThread.Domain)
+	// } else {
+	// 	kernel.ExitThread(kernel.CurrentThread)
+	// }
+	kernel.PerformSchedule = true
+	// return kernel.CurrentThread.regs.EAX, ESUCCESS
+	return newDomain.Pid, ESUCCESS
 }
 
 func linuxWaitPidSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -392,11 +394,11 @@ func linuxWaitPidSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	// log.KDebugln("Wait for ", waitPid)
 
 	for {
-		Block()
+		kernel.Block()
 		notStarted := true
 		stillWaiting := false
-		for cur := allDomains.head; notStarted || cur != allDomains.head; cur = cur.next {
-			if cur.pid == waitPid {
+		for cur := kernel.AllDomains.Head; notStarted || cur != kernel.AllDomains.Head; cur = cur.Next {
+			if cur.Pid == waitPid {
 				stillWaiting = true
 				break
 			}
@@ -416,17 +418,17 @@ func linuxEpollCreateSyscall(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func linuxExitGroupSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	ExitDomain(CurrentThread.domain)
-	PerformSchedule = true
+	kernel.ExitDomain(kernel.CurrentThread.Domain)
+	kernel.PerformSchedule = true
 	// Already in new context so return value from last syscall from current domain
-	return CurrentThread.regs.EAX, ESUCCESS
+	return kernel.CurrentThread.Regs.EAX, ESUCCESS
 }
 
 func linuxExitSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	ExitThread(CurrentThread)
-	PerformSchedule = true
+	kernel.ExitThread(kernel.CurrentThread)
+	kernel.PerformSchedule = true
 	// Already in new context so return value from last syscall from current domain
-	return CurrentThread.regs.EAX, ESUCCESS
+	return kernel.CurrentThread.Regs.EAX, ESUCCESS
 }
 
 func rebootHandler(args syscallArgs) (uint32, syscall.Errno) {
@@ -440,7 +442,7 @@ func rebootHandler(args syscallArgs) (uint32, syscall.Errno) {
 		log.KErrorLn("invalid reboot command")
 		return 0, syscall.EINVAL
 	}
-	Shutdown()
+	kernel.Shutdown()
 	return 0, syscall.EINVAL
 }
 
@@ -450,7 +452,7 @@ func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	//flags := args.arg3
 	//mask := args.arg4
 	buf := args.arg5
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
+	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
 	if !ok {
 		log.KErrorLn("invalid adress in statx")
 		return 0, syscall.EFAULT
@@ -478,7 +480,7 @@ func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 func linuxUnameSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	buf := args.arg1
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
+	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
 	if !ok {
 		log.KErrorLn("invalid adress in uname")
 		return 0, syscall.EFAULT
@@ -493,29 +495,30 @@ func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	stack := args.arg2
 	newThreadMem := mm.AllocPage()
 	newThreadMem.Clear()
-	newThread := (*Thread)(newThreadMem.Pointer())
-	CreateNewThread(newThread, uintptr(stack), CurrentThread, CurrentThread.domain)
-	CurrentThread.domain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), PAGE_RW|PAGE_PERM_KERNEL)
+	newThread := (*kernel.Thread)(newThreadMem.Pointer())
+	kernel.CreateNewThread(newThread, uintptr(stack), kernel.CurrentThread, kernel.CurrentThread.Domain)
+	kernel.CurrentThread.Domain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), kernel.PAGE_RW|kernel.PAGE_PERM_KERNEL)
 	if flags&_CLONE_THREAD == 0 {
 		// This is probably temporary as I don't want to implement COW right now to create a new process
 		log.KDebugLn("[CLONE SYSCALL] Clone where the goal is not a thread does not behave like on linux")
-		newThread.isFork = true
+		// newThread.isFork = true
+		panic.KernelPanic("No forking here!")
 	}
 	// Need to make this better at some point
-	return newThread.tid, ESUCCESS
+	return newThread.Tid, ESUCCESS
 }
 
 func linuxMincoreSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	//addr := args.arg1
 	length := args.arg2
 	vec := args.arg3
-	vecAddr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(vec))
+	vecAddr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(vec))
 	if !ok {
 		log.KErrorLn("Could not look up vec array")
 		return 0, syscall.EFAULT
 	}
 
-	arr := (*[30 << 1]byte)(unsafe.Pointer(vecAddr))[:(length+PAGE_SIZE-1)/PAGE_SIZE]
+	arr := (*[30 << 1]byte)(unsafe.Pointer(vecAddr))[:(length+kernel.PAGE_SIZE-1)/kernel.PAGE_SIZE]
 	for i := range arr {
 		arr[i] = 1
 	}
@@ -525,21 +528,21 @@ func linuxMincoreSyscall(args syscallArgs) (uint32, syscall.Errno) {
 func linuxMunmapSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	baseAddr := args.arg1
 	length := args.arg2
-	//printRegisters(currentInfo, regs)
-	for i := uint32(0); i < length; i += PAGE_SIZE {
+	//printRegisters(currentInfo, Regs)
+	for i := uint32(0); i < length; i += kernel.PAGE_SIZE {
 		addr := uintptr(baseAddr + i)
 
-		if addr < KERNEL_RESERVED {
+		if addr < kernel.KERNEL_RESERVED {
 			return 0, syscall.EINVAL
 		}
-		CurrentThread.domain.MemorySpace.UnmapPage(addr)
+		kernel.CurrentThread.Domain.MemorySpace.UnmapPage(addr)
 	}
 	return 0, ESUCCESS
 }
 
 func linuxBrkSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	newBrk := uintptr(args.arg1)
-	brk := CurrentThread.domain.MemorySpace.Brk
+	brk := kernel.CurrentThread.Domain.MemorySpace.Brk
 	if newBrk == 0 {
 		return uint32(brk), ESUCCESS
 	}
@@ -547,15 +550,15 @@ func linuxBrkSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return uint32(brk), ESUCCESS
 	}
 	//text_mode_print_hex32(brk)
-	for i := (brk + PAGE_SIZE - 1) &^ (PAGE_SIZE - 1); i < newBrk; i += PAGE_SIZE {
+	for i := (brk + kernel.PAGE_SIZE - 1) &^ (kernel.PAGE_SIZE - 1); i < newBrk; i += kernel.PAGE_SIZE {
 		p := mm.AllocPage()
 		p.Clear()
-		flags := uint8(PAGE_PERM_USER | PAGE_RW)
+		flags := uint8(kernel.PAGE_PERM_USER | kernel.PAGE_RW)
 		// log.KDebugln("[brk] Map page ", i, " -> ", p)
 
-		CurrentThread.domain.MemorySpace.MapPage(p.Address(), i, flags)
+		kernel.CurrentThread.Domain.MemorySpace.MapPage(p.Address(), i, flags)
 	}
-	CurrentThread.domain.MemorySpace.Brk = newBrk
+	kernel.CurrentThread.Domain.MemorySpace.Brk = newBrk
 	// log.KDebugln("BRK: ", newBrk)
 	return uint32(newBrk), ESUCCESS
 }
@@ -571,16 +574,16 @@ func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
 	}
 
 	if target == 0 {
-		target = CurrentThread.domain.MemorySpace.VmTop
+		target = kernel.CurrentThread.Domain.MemorySpace.VmTop
 	}
-	if target+uintptr(size) < KERNEL_RESERVED {
+	if target+uintptr(size) < kernel.KERNEL_RESERVED {
 		return 0, syscall.EINVAL
 	}
 	if prot == 0 {
 		return uint32(target), ESUCCESS
 	}
 
-	startAddr := CurrentThread.domain.MemorySpace.FindSpaceFor(target, size)
+	startAddr := kernel.CurrentThread.Domain.MemorySpace.FindSpaceFor(target, size)
 
 	if flags&MMAP_MAP_FIXED == MMAP_MAP_FIXED {
 		startAddr = target
@@ -588,24 +591,24 @@ func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.EINVAL
 	}
 
-	for i := startAddr; i < startAddr+size; i += PAGE_SIZE {
+	for i := startAddr; i < startAddr+size; i += kernel.PAGE_SIZE {
 		p := mm.AllocPage()
 		p.Clear()
-		pageFlags := uint8(PAGE_PERM_USER)
+		pageFlags := uint8(kernel.PAGE_PERM_USER)
 		if prot&MMAP_PROT_WRITE == MMAP_PROT_WRITE {
-			pageFlags |= PAGE_RW
+			pageFlags |= kernel.PAGE_RW
 		}
 
-		if CurrentThread.domain.MemorySpace.GetPageTableEntry(i).IsPresent() {
+		if kernel.CurrentThread.Domain.MemorySpace.GetPageTableEntry(i).IsPresent() {
 			if flags&MMAP_MAP_FIXED == MMAP_MAP_FIXED {
 				// TODO: Clear or free and remap page?
-				// currentThread.domain.MemorySpace.unMapPage(i)
+				// kernel.CurrentThread.Domain.MemorySpace.unMapPage(i)
 			} else {
 				// TODO: What to do here?
-				kernelPanic("Trying to map page which is already present without MAP_FIXED")
+				panic.KernelPanic("Trying to map page which is already present without MAP_FIXED")
 			}
 		} else {
-			CurrentThread.domain.MemorySpace.MapPage(p.Address(), i, pageFlags)
+			kernel.CurrentThread.Domain.MemorySpace.MapPage(p.Address(), i, pageFlags)
 		}
 	}
 
@@ -614,33 +617,27 @@ func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
 
 func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	u_info := args.arg1
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(u_info))
+	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(u_info))
 	if !ok {
 		log.KErrorLn("Could not look up user desc")
 		return 0, syscall.EFAULT
 	}
-	desc := (*UserDesc)(unsafe.Pointer(addr))
-	if desc.Flags&UDESC_SEG_NOT_PRESENT != 0 {
+	desc := (*kernel.UserDesc)(unsafe.Pointer(addr))
+	if desc.Flags&kernel.UDESC_SEG_NOT_PRESENT != 0 {
 		log.KErrorLn("fixme: not handling updating entries")
 		return 0, syscall.ENOSYS
 	}
 
 	slot := desc.EntryNumber
 	if slot == 0xffffffff {
-		// Find free slot
-		for i := TLS_START; i < len(CurrentThread.tlsSegments); i++ {
-			if !CurrentThread.tlsSegments[i].IsPresent() {
-				slot = uint32(i)
-				break
-			}
-		}
+		slot = kernel.FindFreeTlsSlot()
 		if slot == 0xffffffff {
 			// There was no free slot
 			return 0, syscall.ESRCH
 		}
 		desc.EntryNumber = slot
 	}
-	SetTlsSegment(slot, desc, CurrentThread.tlsSegments[:])
+	kernel.SetTlsSegment(slot, desc)
 
 	return 0, ESUCCESS
 }
@@ -648,7 +645,7 @@ func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
 func linuxOpenSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	//path := args.arg1
 	flags := args.arg2
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(flags))
+	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(flags))
 	if !ok {
 		return 0, syscall.EFAULT
 	}
@@ -658,7 +655,7 @@ func linuxOpenSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	}
 	//text_mode_println(s)
 	return 0, syscall.ENOSYS
-	//printRegisters(currentInfo, regs)
+	//printRegisters(currentInfo, Regs)
 
 }
 
@@ -666,7 +663,7 @@ func linuxOpenAtSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	fd := args.arg1
 	path := args.arg2
 	flags := args.arg3
-	pathaddr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(path))
+	pathaddr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(path))
 	if !ok {
 		return 0, syscall.EFAULT
 	}
@@ -683,7 +680,7 @@ func linuxOpenAtSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	//text_mode_println(s)
 	return 0, syscall.ENOSYS
-	//printRegisters(currentInfo, regs)
+	//printRegisters(currentInfo, Regs)
 
 }
 
@@ -701,7 +698,7 @@ func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	processed := 0
 	printed := uint32(0)
-	for item, err := range mm.IterateUserSpaceType[ioVec](arr, &CurrentDomain.MemorySpace) {
+	for item, err := range mm.IterateUserSpaceType[ioVec](arr, &kernel.CurrentDomain.MemorySpace) {
 		if err != ESUCCESS {
 			return 0, err
 		}
@@ -738,7 +735,7 @@ func writeSyscallWriteData(fd uint32, text uintptr, length uint32) (uint32, sysc
 
 	index := 0
 	writeLen := uint32(0)
-	for value, err := range CurrentDomain.MemorySpace.IterateUserSpace(text) {
+	for value, err := range kernel.CurrentDomain.MemorySpace.IterateUserSpace(text) {
 		if err != ESUCCESS {
 			return 0, err
 		}
@@ -770,7 +767,7 @@ func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	fd := args.arg1
 	buf := args.arg2
 	count := args.arg3
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
+	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
 	if !ok {
 		log.KErrorLn("Could not look up read addr")
 		return 0, syscall.EFAULT
@@ -781,33 +778,36 @@ func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	if fd == 0 {
 		for num == 0 {
-			for !SerialDevice.HasReceivedData() {
-				Block()
+			for !kernel.SerialDevice.HasReceivedData() {
+				kernel.Block()
 			}
 
-			for SerialDevice.HasReceivedData() && num < count {
-				char := SerialDevice.Read()
+			for kernel.SerialDevice.HasReceivedData() && num < count {
+				char := kernel.SerialDevice.Read()
 				arr[num] = char
 				num++
 			}
 		}
-	} else if fd == 42 {
-		for num == 0 {
-			for buffer.Len() == 0 {
-				Block()
-			}
-
-			for buffer.Len() > 0 && num < count {
-				raw_key := buffer.Pop().Keycode
-				pressed := raw_key&0x80 == 0
-				key := raw_key & 0x7f
-				if pressed {
-					arr[num] = translateKeycode(key)
-					num++
-				}
-			}
-		}
 	}
+	// I don't use keyboard anymore, since I have serial.
+	// When I implmentf device drivers, I might add this again
+	// else if fd == 42 {
+	// 	for num == 0 {
+	// 		for buffer.Len() == 0 {
+	// 			kernel.Block()
+	// 		}
+
+	// 		for buffer.Len() > 0 && num < count {
+	// 			raw_key := buffer.Pop().Keycode
+	// 			pressed := raw_key&0x80 == 0
+	// 			key := raw_key & 0x7f
+	// 			if pressed {
+	// 				arr[num] = translateKeycode(key)
+	// 				num++
+	// 			}
+	// 		}
+	// 	}
+	// }
 	return num, ESUCCESS
 }
 
@@ -822,7 +822,7 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, syscall.ENOSYS
 	}
 
-	addr, ok := CurrentThread.domain.MemorySpace.GetPhysicalAddress(uintptr(uaddr))
+	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(uaddr))
 	if !ok {
 		log.KErrorLn("Could not look up read addr")
 		return 0, syscall.EFAULT
@@ -832,26 +832,27 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	case FUTEX_WAIT:
 		if timeout != 0 {
 			//log.KErrorln("Timeouts are not supported yet")
+			// log.KDebugLn("Timeout futex")
 			return 0, ESUCCESS //syscall.ENOSYS
 		}
-		// This should be atomically
+		// This should be atomically, but we're not multithreaded (as in multicore) yet so it does not matter
 		if val != *futexAddr {
 			return 0, syscall.EAGAIN
 		}
 
-		CurrentThread.isBlocked = true
-		CurrentThread.waitAddress = futexAddr
+		kernel.CurrentThread.IsBlocked = true
+		kernel.CurrentThread.WaitAddress = futexAddr
 		return 0, ESUCCESS
 	case FUTEX_WAKE:
 		var woken uint32 = 0
-		cur := CurrentThread.next
-		for cur != CurrentThread && woken < val {
-			if cur.isBlocked && cur.waitAddress == futexAddr {
-				cur.isBlocked = false
-				cur.waitAddress = nil
+		cur := kernel.CurrentThread.Next
+		for cur != kernel.CurrentThread && woken < val {
+			if cur.IsBlocked && cur.WaitAddress == futexAddr {
+				cur.IsBlocked = false
+				cur.WaitAddress = nil
 				woken++
 			}
-			cur = cur.next
+			cur = cur.Next
 		}
 		return woken, ESUCCESS
 	default:
@@ -861,12 +862,12 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func linuxSchedYieldSyscall(rgs syscallArgs) (uint32, syscall.Errno) {
-	Block()
+	kernel.Block()
 	return 0, ESUCCESS
 }
 
 func unsupportedSyscall() {
 	log.KErrorLn("\nUnsupported Linux syscall received! Disabling interrupts and halting")
-	log.KPrintLn("Syscall Number: ", uintptr(CurrentThread.regs.EAX), " (", uint32(CurrentThread.regs.EAX), ")")
-	panicHelper(CurrentThread)
+	log.KPrintLn("Syscall Number: ", uintptr(kernel.CurrentThread.Regs.EAX), " (", uint32(kernel.CurrentThread.Regs.EAX), ")")
+	panic.KernelPanic("Unsupported syscall")
 }

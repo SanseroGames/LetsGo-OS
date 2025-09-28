@@ -24,9 +24,9 @@ func do_kernelPanic(caller uintptr, msg string) {
 }
 
 func panicHelper(thread *Thread) {
-	log.KPrintLn("Domain ID: ", thread.domain.pid, ", Thread ID: ", thread.tid)
-	log.KPrintLn("Program name: ", thread.domain.programName)
-	if thread.isKernelInterrupt {
+	log.KPrintLn("Domain ID: ", thread.Domain.Pid, ", Thread ID: ", thread.Tid)
+	log.KPrintLn("Program name: ", thread.Domain.ProgramName)
+	if thread.IsKernelInterrupt {
 		log.KPrint("In kernel function: ")
 		printFuncName(thread.kernelInfo.EIP)
 	} else {
@@ -43,17 +43,17 @@ func printThreadRegisters(t *Thread) {
 	log.KPrint("EIP: ", t.info.EIP, "      ", "EIP: ", t.kernelInfo.EIP, " ", f._Func().Name(), "\n")
 	//rintRegisterLineInfo("EIP: ", t.info.EIP, t.kernelInfo.EIP, f._Func().Name())
 	printRegisterLine(20, "ESP: ", t.info.ESP, t.kernelInfo.ESP)
-	printRegisterLine(20, "EBP: ", t.regs.EBP, t.kernelRegs.EBP)
-	printRegisterLine(20, "EAX: ", t.regs.EAX, t.kernelRegs.EAX)
-	printRegisterLine(20, "EBX: ", t.regs.EBX, t.kernelRegs.EBX)
-	printRegisterLine(20, "ECX: ", t.regs.ECX, t.kernelRegs.ECX)
-	printRegisterLine(20, "EDX: ", t.regs.EDX, t.kernelRegs.EDX)
-	printRegisterLine(20, "ESI: ", t.regs.ESI, t.kernelRegs.ESI)
-	printRegisterLine(20, "EDI: ", t.regs.EDI, t.kernelRegs.EDI)
+	printRegisterLine(20, "EBP: ", t.Regs.EBP, t.KernelRegs.EBP)
+	printRegisterLine(20, "EAX: ", t.Regs.EAX, t.KernelRegs.EAX)
+	printRegisterLine(20, "EBX: ", t.Regs.EBX, t.KernelRegs.EBX)
+	printRegisterLine(20, "ECX: ", t.Regs.ECX, t.KernelRegs.ECX)
+	printRegisterLine(20, "EDX: ", t.Regs.EDX, t.KernelRegs.EDX)
+	printRegisterLine(20, "ESI: ", t.Regs.ESI, t.KernelRegs.ESI)
+	printRegisterLine(20, "EDI: ", t.Regs.EDI, t.KernelRegs.EDI)
 	printRegisterLine(20, "EFLAGS: ", t.info.EFLAGS, t.kernelInfo.EFLAGS)
 	printRegisterLine(20, "Exception: ", t.info.ExceptionCode, t.kernelInfo.ExceptionCode)
 	printRegisterLine(20, "Interrupt: ", t.info.InterruptNumber, t.kernelInfo.InterruptNumber)
-	printRegisterLine(20, "Krn ESP: ", t.regs.KernelESP, t.kernelRegs.KernelESP)
+	printRegisterLine(20, "Krn ESP: ", t.Regs.KernelESP, t.KernelRegs.KernelESP)
 }
 
 func printRegisterLine(tabLength int, label string, userReg, kernelReg uint32) {

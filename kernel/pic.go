@@ -28,7 +28,7 @@ var picHandlers [16]func()
 
 func PICInterruptHandler() {
 	info := &CurrentThread.info
-	if CurrentThread.isKernelInterrupt {
+	if CurrentThread.IsKernelInterrupt {
 		info = &CurrentThread.kernelInfo
 	}
 	irq := info.InterruptNumber - uint32(PIC1Offset)
