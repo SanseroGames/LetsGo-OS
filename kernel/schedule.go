@@ -20,7 +20,7 @@ type taskswitchbuf struct {
 var (
 	CurrentThread  *Thread    = &scheduleThread
 	CurrentDomain  *Domain    = nil
-	AllDomains     domainList = domainList{Head: nil, tail: nil}
+	allDomains     domainList = domainList{head: nil, tail: nil}
 	largestPid     uint32     = 0x0
 	kernelHlt      bool       = false
 	scheduleThread Thread     = Thread{}
@@ -30,20 +30,20 @@ func backupFpRegs(buffer uintptr)
 func restoreFpRegs(buffer uintptr)
 
 func AddDomain(d *Domain) {
-	AllDomains.Append(d)
+	allDomains.Append(d)
 	if ENABLE_DEBUG {
 		log.KDebugLn("Added new domain with pid ", d.Pid)
 	}
 	if CurrentDomain == nil || CurrentThread == nil {
-		CurrentDomain = AllDomains.Head
+		CurrentDomain = allDomains.head
 		CurrentThread = CurrentDomain.runningThreads.thread
 	}
 }
 
 func ExitDomain(d *Domain) {
-	AllDomains.Remove(d)
+	allDomains.Remove(d)
 
-	if AllDomains.Head == nil {
+	if allDomains.head == nil {
 		CurrentDomain = nil
 	}
 
@@ -135,10 +135,10 @@ func Schedule() {
 	}
 	//log.KDebug("Scheduling in ")
 	//printTid(defaultLogWriter, currentThread)
-	nextDomain := CurrentDomain.Next
+	nextDomain := CurrentDomain.next
 	newThread := nextDomain.runningThreads.Next()
 	if newThread == nil {
-		for newDomain := nextDomain.Next; newDomain != nextDomain; newDomain = newDomain.Next {
+		for newDomain := nextDomain.next; newDomain != nextDomain; newDomain = newDomain.next {
 			newThread = newDomain.runningThreads.Next()
 			if newThread != nil {
 				break

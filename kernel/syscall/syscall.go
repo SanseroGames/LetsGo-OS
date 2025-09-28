@@ -254,6 +254,7 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_EPOLL_CTL, "epoll_ctl syscall", okHandler)
 	RegisterSyscall(syscall.SYS_DUP3, "dup3 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_DUP2, "dup2 syscall", okHandler)
+	RegisterSyscall(syscall.SYS_DUP, "dup syscall", invalHandler)
 	RegisterSyscall(syscall.SYS_EXECVE, "execve syscall", linuxExecveSyscall)
 	RegisterSyscall(syscall.SYS_MADVISE, "madvise syscall", okHandler)
 	RegisterSyscall(syscall.SYS_PRLIMIT64, "prlimit64 syscall", okHandler)
@@ -261,6 +262,7 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_WAIT4, "wait4 syscall", linuxWaitPidSyscall)
 	RegisterSyscall(syscall.SYS_FSTATAT64, "fstatat64 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_GETCWD, "fstatat64 syscall", okHandler)
+	RegisterSyscall(syscall.SYS_IOCTL, "ioctl syscall", invalHandler)
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -395,16 +397,7 @@ func linuxWaitPidSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 	for {
 		kernel.Block()
-		notStarted := true
-		stillWaiting := false
-		for cur := kernel.AllDomains.Head; notStarted || cur != kernel.AllDomains.Head; cur = cur.Next {
-			if cur.Pid == waitPid {
-				stillWaiting = true
-				break
-			}
-			notStarted = false
-		}
-		if !stillWaiting {
+		if kernel.FindDomainByPid(waitPid) == nil {
 			break
 		}
 	}
