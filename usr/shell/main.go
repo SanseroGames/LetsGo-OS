@@ -65,6 +65,10 @@ func readLine() []byte {
 }
 
 func main() {
+	os.Setenv("PWD", "/usr")
+	os.Setenv("NAME", "Let'sGo OS!")
+	os.Setenv("SHELL", "/usr/shell")
+	os.Setenv("HOSTTYPE", "x86")
 	for {
 		fmt.Print("> ")
 		line := readLine()
@@ -85,17 +89,22 @@ func main() {
 		}
 
 		argv := make([]uintptr, len(args)+1)
-		for i := 0; i < len(args); i++ {
+		for i := range len(args) {
 			arg := args[i]
 			arg = append(arg, 0)
 			argv[i] = uintptr(unsafe.Pointer(&arg[0]))
 		}
 		argv[len(args)] = 0
+		envp, err := syscall.SlicePtrFromStrings(os.Environ())
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
 
 		r, _, _ := syscall.RawSyscall(syscall.SYS_EXECVE,
 			uintptr(unsafe.Pointer(&binPath[0])),
 			uintptr(unsafe.Pointer(&argv[0])),
-			uintptr(unsafe.Pointer(nil)))
+			uintptr(unsafe.Pointer(&envp[0])))
 
 		pid := int(r)
 		if pid <= 0 {

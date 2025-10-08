@@ -207,19 +207,19 @@ func StartProgram(path string, outDomain *Domain, outMainThread *Thread) syscall
 		log.KErrorLn("Could not load elf file")
 		return err
 	}
-	return startProgramInternal(module, 0, outDomain, outMainThread)
+	return startProgramInternal(module, 0, 0, outDomain, outMainThread)
 }
 
-func StartProgramUsr(path uintptr, argv uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
+func StartProgramUsr(path uintptr, argv uintptr, envp uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
 	module, err := FindMultibootModuleUsr(path)
 	if err != ESUCCESS {
 		log.KErrorLn("Could not load elf file")
 		return err
 	}
-	return startProgramInternal(module, argv, outDomain, outMainThread)
+	return startProgramInternal(module, argv, envp, outDomain, outMainThread)
 }
 
-func startProgramInternal(module *MultibootModule, argv uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
+func startProgramInternal(module *MultibootModule, argv uintptr, envp uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
 	if outDomain == nil || outMainThread == nil {
 		log.KErrorLn("Cannot start program. Please allocate the memory for me")
 		return syscall.ENOMEM
@@ -264,10 +264,6 @@ func startProgramInternal(module *MultibootModule, argv uintptr, outDomain *Doma
 				outDomain.MemorySpace.FreeAllPages()
 				return err
 			}
-			// get arg length
-			// get slice on argPAge
-			// copy data
-			//
 			if argPointer == 0 {
 				break
 			}
@@ -294,13 +290,47 @@ func startProgramInternal(module *MultibootModule, argv uintptr, outDomain *Doma
 	}
 	argPageUintPtr[argcOffset/4] = uintptr(argCount)
 
+	envCount := 0
+	envpOffset := argpOffset + (argCount+1)*4
+	pointerPage = argPageUintPtr[envpOffset/4:]
+	pointerOffset = 0
+	if envp != 0 {
+		for envPointer, err := range mm.IterateUserSpaceType[uintptr](envp, &CurrentDomain.MemorySpace) {
+			if err != ESUCCESS {
+				outDomain.MemorySpace.FreeAllPages()
+				return err
+			}
+			if envPointer == 0 {
+				break
+			}
+			envLength := 0
+			for value, err := range CurrentDomain.MemorySpace.IterateUserSpace(envPointer) {
+				if err != ESUCCESS {
+					outDomain.MemorySpace.FreeAllPages()
+					return err
+				}
+				envLength++
+				if value == 0 {
+					break
+				}
+			}
+			envSlice := argPage[argOffset-envLength : argOffset]
+			CurrentDomain.MemorySpace.ReadBytesFromUserSpace(envPointer, envSlice)
+			argOffset = argOffset - envLength
+
+			// TODO: Check that it wont overlap
+			envCount++
+			pointerPage[pointerOffset] = defaultStackStart - PAGE_SIZE + uintptr(argOffset)
+			pointerOffset++
+		}
+	}
+
 	var aux [32]auxVecEntry
 	nrVec := LoadAuxVector(aux[:], elfHdr, loadAddr)
 	nrVec += nrVec % 2
 	vecByteSize := nrVec * int(unsafe.Sizeof(aux[0]))
 
-	envpOffset := argpOffset + (argCount+1)*4
-	auxOffset := envpOffset + ( /*envpCount + */ 1)*4
+	auxOffset := envpOffset + (envCount+1)*4
 
 	auxVectorBytes := argPage[auxOffset : auxOffset+vecByteSize]
 	auxVector := unsafe.Slice((*auxVecEntry)(unsafe.Pointer(unsafe.SliceData(auxVectorBytes))), len(auxVectorBytes)/int(unsafe.Sizeof(aux[0])))
