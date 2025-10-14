@@ -384,7 +384,7 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	// } else {
 	// 	kernel.ExitThread(kernel.CurrentThread)
 	// }
-	kernel.PerformSchedule = true
+	// kernel.PerformSchedule = true
 	// return kernel.CurrentThread.regs.EAX, ESUCCESS
 	return newDomain.Pid, ESUCCESS
 }
@@ -397,7 +397,7 @@ func linuxWaitPidSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	// log.KDebugln("Wait for ", waitPid)
 
 	for {
-		kernel.Block()
+		kernel.Yield()
 		if kernel.FindDomainByPid(waitPid) == nil {
 			break
 		}
@@ -413,16 +413,12 @@ func linuxEpollCreateSyscall(args syscallArgs) (uint32, syscall.Errno) {
 
 func linuxExitGroupSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	kernel.ExitDomain(kernel.CurrentThread.Domain)
-	kernel.PerformSchedule = true
-	// Already in new context so return value from last syscall from current domain
-	return kernel.CurrentThread.Regs.EAX, ESUCCESS
+	return 0, syscall.EINVAL
 }
 
 func linuxExitSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	kernel.ExitThread(kernel.CurrentThread)
-	kernel.PerformSchedule = true
-	// Already in new context so return value from last syscall from current domain
-	return kernel.CurrentThread.Regs.EAX, ESUCCESS
+	return 0, syscall.EINVAL
 }
 
 func rebootHandler(args syscallArgs) (uint32, syscall.Errno) {
@@ -490,8 +486,8 @@ func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	newThreadMem := mm.AllocPage()
 	newThreadMem.Clear()
 	newThread := (*kernel.Thread)(newThreadMem.Pointer())
-	kernel.CreateNewThread(newThread, uintptr(stack), kernel.CurrentThread, kernel.CurrentThread.Domain)
 	kernel.CurrentThread.Domain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), kernel.PAGE_RW|kernel.PAGE_PERM_KERNEL)
+	kernel.CreateNewThread(newThread, uintptr(stack), kernel.CurrentThread, kernel.CurrentThread.Domain)
 	if flags&_CLONE_THREAD == 0 {
 		// This is probably temporary as I don't want to implement COW right now to create a new process
 		log.KDebugLn("[CLONE SYSCALL] Clone where the goal is not a thread does not behave like on linux")
@@ -773,7 +769,7 @@ func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	if fd == 0 {
 		for num == 0 {
 			for !kernel.SerialDevice.HasReceivedData() {
-				kernel.Block()
+				kernel.Yield()
 			}
 
 			for kernel.SerialDevice.HasReceivedData() && num < count {
@@ -809,7 +805,7 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	uaddr := args.arg1
 	futex_op := args.arg2
 	val := args.arg3
-	timeout := args.arg4
+	// timeout := args.arg4
 
 	if futex_op&FUTEX_PRIVATE_FLAG == 0 {
 		log.KErrorLn("Futex on shared futexes is not supported")
@@ -824,18 +820,20 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	futexAddr := (*uint32)(unsafe.Pointer(addr))
 	switch futex_op & 0xf {
 	case FUTEX_WAIT:
-		if timeout != 0 {
-			//log.KErrorln("Timeouts are not supported yet")
-			// log.KDebugLn("Timeout futex")
-			return 0, ESUCCESS //syscall.ENOSYS
-		}
+		// If timeout is not 0 we pretend it is. The standard says that it should guarnatee not to wakeup before the timeout, so not waking up should count I guess
+		// if timeout != 0 {
+		// 	return 0, ESUCCESS //syscall.ENOSYS
+		// }
+
 		// This should be atomically, but we're not multithreaded (as in multicore) yet so it does not matter
 		if val != *futexAddr {
 			return 0, syscall.EAGAIN
 		}
 
-		kernel.CurrentThread.IsBlocked = true
 		kernel.CurrentThread.WaitAddress = futexAddr
+		for kernel.CurrentThread.WaitAddress != nil {
+			kernel.Block()
+		}
 		return 0, ESUCCESS
 	case FUTEX_WAKE:
 		var woken uint32 = 0
@@ -856,7 +854,7 @@ func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func linuxSchedYieldSyscall(rgs syscallArgs) (uint32, syscall.Errno) {
-	kernel.Block()
+	kernel.Yield()
 	return 0, ESUCCESS
 }
 

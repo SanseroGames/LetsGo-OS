@@ -106,24 +106,42 @@ func ExitThread(t *Thread) {
 	}, (uintptr)(unsafe.Pointer(t)))
 }
 
-func BlockThread(t *Thread) {
-	t.IsBlocked = true
-	t.Domain.runningThreads.Dequeue(t)
-	t.Domain.blockedThreads.Enqueue(t)
-	PerformSchedule = true
-}
-
-func getESP() uintptr
 func waitForInterrupt()
 
-func Block() {
+/*
+ * Yield execution but allow thread to be scheduled again.
+ */
+func Yield() {
 	waitForInterrupt()
+}
+
+/*
+ * Yield execution and prevent thread from being scheduled
+ */
+func Block() {
+	CurrentThread.IsBlocked = true
+	for CurrentThread.IsBlocked {
+		waitForInterrupt()
+	}
 }
 
 func ResumeThread(t *Thread) {
 	t.IsBlocked = false
 	t.Domain.blockedThreads.Dequeue(t)
 	t.Domain.runningThreads.Enqueue(t)
+}
+
+func getNextUnblockedThread(domain *Domain) *Thread {
+	newThread := domain.runningThreads.Next()
+	if newThread == nil || !newThread.IsBlocked {
+		return newThread
+	}
+	for cur := domain.runningThreads.Next(); cur != newThread; cur = domain.runningThreads.Next() {
+		if !cur.IsBlocked {
+			return cur
+		}
+	}
+	return nil
 }
 
 func Schedule() {
@@ -136,10 +154,11 @@ func Schedule() {
 	//log.KDebug("Scheduling in ")
 	//printTid(defaultLogWriter, currentThread)
 	nextDomain := CurrentDomain.next
-	newThread := nextDomain.runningThreads.Next()
+	newThread := getNextUnblockedThread(nextDomain)
+
 	if newThread == nil {
 		for newDomain := nextDomain.next; newDomain != nextDomain; newDomain = newDomain.next {
-			newThread = newDomain.runningThreads.Next()
+			newThread = getNextUnblockedThread(newDomain)
 			if newThread != nil {
 				break
 			}
