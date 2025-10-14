@@ -34,6 +34,7 @@ func readLine() []byte {
 		case 0x7f:
 			input = '\b'
 		case 0x1b: // \e
+			input_line = append(input_line, '^')
 			fmt.Print("^")
 			input = '['
 		case 0x4:
@@ -88,23 +89,31 @@ func main() {
 			binPath = append([]byte("/usr/"), cmd...)
 		}
 
-		argv := make([]uintptr, len(args)+1)
+		argv := make([]string, len(args))
 		for i := range len(args) {
-			arg := args[i]
-			arg = append(arg, 0)
-			argv[i] = uintptr(unsafe.Pointer(&arg[0]))
+			argv[i] = string(args[i])
 		}
-		argv[len(args)] = 0
-		envp, err := syscall.SlicePtrFromStrings(os.Environ())
+
+		argv0p, err := syscall.BytePtrFromString(string(binPath))
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Failed to parse cmd")
+			continue
+		}
+		argvp, err := syscall.SlicePtrFromStrings(argv)
+		if err != nil {
+			fmt.Printf("Failed to parse argv")
+			continue
+		}
+		envvp, err := syscall.SlicePtrFromStrings(os.Environ())
+		if err != nil {
+			fmt.Printf("Failed to parse envp")
 			continue
 		}
 
 		r, _, _ := syscall.RawSyscall(syscall.SYS_EXECVE,
-			uintptr(unsafe.Pointer(&binPath[0])),
-			uintptr(unsafe.Pointer(&argv[0])),
-			uintptr(unsafe.Pointer(&envp[0])))
+			uintptr(unsafe.Pointer(argv0p)),
+			uintptr(unsafe.Pointer(&argvp[0])),
+			uintptr(unsafe.Pointer(&envvp[0])))
 
 		pid := int(r)
 		if pid <= 0 {
