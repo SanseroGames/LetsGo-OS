@@ -19,11 +19,21 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+uint32_t uaddr = 42;
+
+
 int clone_test_to_test_exit(void *ptr)
 {
+
+	// FUTEX_WAKE
+	printf(" Futex wake\n");
+    uaddr = 1;
+	syscall(SYS_futex, &uaddr, FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 1, NULL, NULL, 0);
+
 	// SYS_EXIT
 	printf("Test exit\n");
 	syscall(SYS_exit, 42);
+	printf("ERROR: SYS_EXIT failed\n");
 	return 0;
 }
 
@@ -108,21 +118,17 @@ void main()
 	pid_t pid = getpid();
 	printf("test get_pid: %d\n", pid);
 
-	// SYS_FUTEX
+    // SYS_CLONE
+	printf("Test clone\n");
+	void *new_stack = malloc(0x4000);
+	clone(clone_test_to_test_exit, new_stack, CLONE_SIGHAND|CLONE_FS|CLONE_VM|CLONE_FILES|CLONE_THREAD, NULL);
+
+    // SYS_FUTEX
 	printf("Test Futex\n");
 	// FUTEX_WAIT
 	printf(" Futex wait\n");
-	uint32_t uaddr;
 	syscall(SYS_futex, &uaddr, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, 42, NULL, NULL, 0);
-
-	// FUTEX_WAKE
-	printf(" Futex wake\n");
-	syscall(SYS_futex, &uaddr, FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 42, NULL, NULL, 0);
-
-	// SYS_CLONE
-	printf("Test clone\n");
-	void *new_stack = malloc(0x4000);
-	clone(clone_test_to_test_exit, new_stack, CLONE_THREAD, NULL);
+    // FUTEX_WAKE is called in spawned thread
 
 	// SYS_UNAME
 	printf("Test uname\n");
