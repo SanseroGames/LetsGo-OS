@@ -2,6 +2,7 @@ package log
 
 import (
 	"io"
+	"reflect"
 	"unsafe"
 )
 
@@ -138,6 +139,7 @@ func printHex(w io.Writer, v uint64) {
 func printPointer(w io.Writer, p unsafe.Pointer) {
 	printHex(w, uint64(uintptr(p)))
 }
+
 func printUintptr(w io.Writer, p uintptr) {
 	printHex(w, uint64(p))
 }
@@ -146,13 +148,51 @@ func printString(w io.Writer, s string) {
 	writeWrapper(w, bytes(s))
 }
 
-//func printslice(s []byte) {
-//	sp := (*slice)(unsafe.Pointer(&s))
-//	kprint("[", len(s), "/", cap(s), "]")
-//	printpointer(sp.array)
-//}
+func printAny(w io.Writer, value reflect.Value) {
+	switch value.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		printInt(w, value.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		printUint(w, value.Uint())
+	case reflect.Bool:
+		printBool(w, value.Bool())
+	case reflect.Uintptr:
+		printUintptr(w, uintptr(value.Uint()))
+	case reflect.String:
+		printString(w, "\"")
+		printString(w, value.String())
+		printString(w, "\"")
+	case reflect.Array, reflect.Slice:
+		printAnySlice(w, value)
+	default:
+		printAnyObject(w, value)
+	}
+}
 
-func KWPrint(w io.Writer, args ...interface{}) {
+func printAnyObject(w io.Writer, value reflect.Value) {
+	printString(w, value.Type().String())
+	if value.Kind() == reflect.Pointer {
+		printString(w, " (at ")
+		printPointer(w, value.UnsafePointer())
+		printString(w, ")")
+	}
+}
+
+func printAnySlice(w io.Writer, value reflect.Value) {
+	printString(w, value.Type().String())
+	printString(w, "[")
+	for i := range value.Len() {
+		elem := value.Index(i)
+		printAny(w, elem)
+		if i != value.Len()-1 {
+			printString(w, ",")
+		}
+	}
+	printString(w, "]")
+}
+
+func KWPrint(w io.Writer, args ...any) {
+	// basic types are covered here, more complex types are done with reflection in printAny.
 	for _, v := range args {
 		switch t := v.(type) {
 		case bool:
@@ -182,41 +222,42 @@ func KWPrint(w io.Writer, args ...interface{}) {
 		case complex128:
 			printComplex(w, t)
 		default:
-			// TODO: Maybe print type if that is possible without memory allocation?
-			printString(w, "<Unknown Type>")
+			// values printed here are considered debug values and are formatted as such
+			value := reflect.ValueOf(v)
+			printAny(w, value)
 		}
 	}
 }
 
-func KPrint(args ...interface{}) {
+func KPrint(args ...any) {
 	for _, w := range defaultLogWriters {
 		KWPrint(w, args...)
 	}
 }
 
-func KPrintLn(args ...interface{}) {
+func KPrintLn(args ...any) {
 	KPrint(args...)
 	KPrint("\n")
 }
 
-func KError(args ...interface{}) {
+func KError(args ...any) {
 	for _, w := range defaultErrorWriters {
 		KWPrint(w, args...)
 	}
 }
 
-func KErrorLn(args ...interface{}) {
+func KErrorLn(args ...any) {
 	KError(args...)
 	KError("\n")
 }
 
-func KDebug(args ...interface{}) {
+func KDebug(args ...any) {
 	for _, w := range defaultDebugWriters {
 		KWPrint(w, args...)
 	}
 }
 
-func KDebugLn(args ...interface{}) {
+func KDebugLn(args ...any) {
 	KDebug(args...)
 	KDebug("\n")
 }
