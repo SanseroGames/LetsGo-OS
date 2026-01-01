@@ -1,0 +1,20 @@
+{
+  "configurations": [
+    {
+      "type": "gdb",
+      "request": "attach",
+      "name": "Attach to gdbserver",
+      "executable": "build/kernel-x86.bin",
+      "target": "localhost:1234",
+      "remote": true,
+      "cwd": "${workspaceRoot}",
+      "gdbpath": "gdb",
+      "autorun": [
+        "add-auto-load-safe-path ${workspaceRoot}",
+        "add-auto-load-safe-path /usr/lib/go-1.25/src/runtime/runtime-gdb.py",
+        "set arch i386:intel",
+        "source /usr/lib/go-1.25/src/runtime/runtime-gdb.py"
+      ]
+    }
+  ]
+}
