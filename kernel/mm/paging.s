@@ -6,7 +6,7 @@ TEXT ·enablePaging(SB),NOSPLIT,$0
     MOVL AX, CR0
     RET
 
-TEXT ·switchPageDir(SB),NOSPLIT,$0
+TEXT ·SwitchPageDir(SB),NOSPLIT,$0
     MOVL ·dir+0(FP), AX
     MOVL AX, CR3
     RET

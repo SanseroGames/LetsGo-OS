@@ -17,7 +17,7 @@ type Thread struct {
 	isFork bool
 
 	// Infos to stall a thread when switching
-	info InterruptInfo
+	Info InterruptInfo
 	Regs RegisterState
 
 	kernelInfo InterruptInfo

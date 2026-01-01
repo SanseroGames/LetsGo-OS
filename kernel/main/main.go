@@ -11,6 +11,7 @@ import (
 	"github.com/sanserogames/letsgo-os/kernel"
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
+	"github.com/sanserogames/letsgo-os/kernel/multiboot"
 	"github.com/sanserogames/letsgo-os/kernel/panic"
 	kernelSyscall "github.com/sanserogames/letsgo-os/kernel/syscall"
 )
@@ -36,7 +37,7 @@ var errorWriters = []io.Writer{&kernel.SerialDevice, kernel.TextModeErrorWriter{
 var logWriters = []io.Writer{&kernel.SerialDevice, kernel.TextModeWriter{}}
 
 //go:linkname kmain main.main
-func kmain(info *kernel.MultibootInfo, stackstart uintptr, stackend uintptr) {
+func kmain(info *multiboot.MultibootInfo, stackstart uintptr, stackend uintptr) {
 	if stackstart <= stackend {
 		// This will fail as printing is not yet initialized
 		panic.KernelPanic("No stack")
@@ -60,23 +61,40 @@ func kmain(info *kernel.MultibootInfo, stackstart uintptr, stackend uintptr) {
 
 	kernel.InitSegments()
 
+	log.KDebugLn("InitSegments complete")
+
 	kernel.InitInterrupts()
+	log.KDebugLn("InitInterrupts complete")
 
 	kernelSyscall.InitSyscall()
+	log.KDebugLn("InitSyscall complete")
 
 	kernel.InitPIC()
+	log.KDebugLn("InitPIC complete")
 
 	kernel.InitPit()
+	log.KDebugLn("InitPit complete")
+
 	kernel.InitKeyboard()
+	log.KDebugLn("InitKeyboard complete")
+
 	kernel.InitATA()
+	log.KDebugLn("InitATA complete")
 	kernel.InitSerialDeviceInterrupt()
 
+	log.KDebugLn("InitSerialDeviceInterrupt complete")
 	kernel.InitMultiboot(info)
+	log.KDebugLn("InitMultiboot complete")
+	kernel.SetInterruptHandler(0xE, pageFaultWrapper, kernel.KCS_SELECTOR, kernel.PRIV_USER)
+	log.KDebugLn("SetInterruptHandler complete")
+
 	//printMemMaps()
 
-	kernel.InitPaging()
+	mm.InitPaging(kernel.MemoryMaps[:])
+	log.KDebugLn("InitPaging complete")
 
 	kernel.InitUserMode(stackstart, stackend)
+	log.KDebugLn("InitUserMode complete")
 
 	kernel.TextModePrintLnCol("Initilaization complete", 0x2)
 	log.KDebugLn("Initialization complete")
@@ -103,4 +121,9 @@ func kmain(info *kernel.MultibootInfo, stackstart uintptr, stackend uintptr) {
 	}
 	kernel.KernelThreadInit()
 	panic.KernelPanic("Could not jump to user space :/")
+}
+
+func pageFaultWrapper() {
+	// TODO: Replace
+	mm.PageFaultHandler(uintptr(kernel.CurrentThread.Info.ExceptionCode))
 }

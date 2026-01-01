@@ -7,6 +7,7 @@ import (
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
+	"github.com/sanserogames/letsgo-os/kernel/multiboot"
 	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
@@ -114,7 +115,7 @@ func LoadAuxVector(buf []auxVecEntry, elfHdr *elf.Header32, loadAddr uintptr) in
 	return start
 }
 
-func FindMultibootModule(multibootModuleName string) (*MultibootModule, syscall.Errno) {
+func FindMultibootModule(multibootModuleName string) (*multiboot.MultibootModule, syscall.Errno) {
 	loadedModuleSlice := loadedModules[:]
 	for idx, loadedModule := range loadedModuleSlice {
 		if loadedModule.Cmdline() == multibootModuleName {
@@ -124,7 +125,7 @@ func FindMultibootModule(multibootModuleName string) (*MultibootModule, syscall.
 	return nil, syscall.ENOENT
 }
 
-func FindMultibootModuleUsr(multibootModuleName uintptr) (*MultibootModule, syscall.Errno) {
+func FindMultibootModuleUsr(multibootModuleName uintptr) (*multiboot.MultibootModule, syscall.Errno) {
 	// Since we have no filesystem, I expect module names not to be that long. Just load it into a buffer so I can string compare
 	var buf [100]byte
 	idx := 0
@@ -144,7 +145,7 @@ func FindMultibootModuleUsr(multibootModuleName uintptr) (*MultibootModule, sysc
 	return FindMultibootModule(unsafe.String(&buf[0], idx))
 }
 
-func LoadElfFile(module *MultibootModule, space *mm.MemSpace) (*elf.Header32, uintptr, uintptr, syscall.Errno) {
+func LoadElfFile(module *multiboot.MultibootModule, space *mm.MemSpace) (*elf.Header32, uintptr, uintptr, syscall.Errno) {
 	if module == nil {
 		log.KErrorLn("[ELF] Unknown module")
 		return nil, 0, 0, syscall.ENOENT

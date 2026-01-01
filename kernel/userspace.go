@@ -8,6 +8,7 @@ import (
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
+	"github.com/sanserogames/letsgo-os/kernel/multiboot"
 )
 
 // TODO: Move somewhere else?
@@ -130,8 +131,8 @@ func printFuncName(pc uintptr) {
 
 func KernelThreadInit() {
 	SetInterruptStack(CurrentThread.kernelStack.hi)
-	switchPageDir(CurrentThread.Domain.MemorySpace.PageDirectory)
-	JumpUserMode(CurrentThread.Regs, CurrentThread.info)
+	mm.SwitchPageDir(CurrentThread.Domain.MemorySpace.PageDirectory)
+	JumpUserMode(CurrentThread.Regs, CurrentThread.Info)
 }
 
 func JumpUserMode(regs RegisterState, info InterruptInfo)
@@ -162,34 +163,34 @@ func CreateNewThread(outThread *Thread, newStack uintptr, cloneThread *Thread, t
 	outThread.kernelInfo.EFLAGS = EFLAGS_R
 	targetDomain.MemorySpace.MapPage(kernelStack.Address(), kernelStack.Address(), PAGE_RW|PAGE_PERM_KERNEL)
 
-	outThread.info.CS = defaultUserSegments.cs | 3
-	outThread.info.SS = defaultUserSegments.ss | 3
+	outThread.Info.CS = defaultUserSegments.cs | 3
+	outThread.Info.SS = defaultUserSegments.ss | 3
 	outThread.Regs.GS = defaultUserSegments.gs | 3
 	outThread.Regs.FS = defaultUserSegments.fs | 3
 	outThread.Regs.ES = defaultUserSegments.es | 3
 	outThread.Regs.DS = defaultUserSegments.ds | 3
-	outThread.info.EFLAGS = EFLAGS_R | EFLAGS_IF
+	outThread.Info.EFLAGS = EFLAGS_R | EFLAGS_IF
 	if newStack != 0 {
 		outThread.userStack.hi = newStack
 		outThread.userStack.lo = newStack - 16*0x1000
-		outThread.info.ESP = uint32(newStack)
+		outThread.Info.ESP = uint32(newStack)
 	} else {
 		outThread.userStack.hi = 0
 		outThread.userStack.lo = 0
-		outThread.info.ESP = 0
+		outThread.Info.ESP = 0
 	}
 
 	if cloneThread != nil {
-		outThread.info.CS = cloneThread.info.CS
-		outThread.info.SS = cloneThread.info.SS
-		outThread.info.EIP = cloneThread.info.EIP
-		outThread.info.EFLAGS = cloneThread.info.EFLAGS
+		outThread.Info.CS = cloneThread.Info.CS
+		outThread.Info.SS = cloneThread.Info.SS
+		outThread.Info.EIP = cloneThread.Info.EIP
+		outThread.Info.EFLAGS = cloneThread.Info.EFLAGS
 		outThread.Regs = cloneThread.Regs
 		outThread.Regs.EAX = 0
 		if newStack == 0 {
 			outThread.userStack.hi = cloneThread.userStack.hi
 			outThread.userStack.lo = cloneThread.userStack.lo
-			outThread.info.ESP = cloneThread.info.ESP
+			outThread.Info.ESP = cloneThread.Info.ESP
 		}
 		//outThread.fpState = cloneThread.fpState
 		copy(outThread.tlsSegments[TLS_START:], cloneThread.tlsSegments[TLS_START:])
@@ -219,13 +220,13 @@ func StartProgramUsr(path uintptr, argv uintptr, envp uintptr, outDomain *Domain
 	return startProgramInternal(module, argv, envp, outDomain, outMainThread)
 }
 
-func startProgramInternal(module *MultibootModule, argv uintptr, envp uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
+func startProgramInternal(module *multiboot.MultibootModule, argv uintptr, envp uintptr, outDomain *Domain, outMainThread *Thread) syscall.Errno {
 	if outDomain == nil || outMainThread == nil {
 		log.KErrorLn("Cannot start program. Please allocate the memory for me")
 		return syscall.ENOMEM
 	}
 	outDomain.Segments = defaultUserSegments
-	outDomain.MemorySpace = CreateNewPageDirectory()
+	outDomain.MemorySpace = mm.CreateNewPageDirectory()
 
 	elfHdr, loadAddr, topAddr, err := LoadElfFile(module, &outDomain.MemorySpace)
 
@@ -337,8 +338,8 @@ func startProgramInternal(module *MultibootModule, argv uintptr, envp uintptr, o
 
 	copy(auxVector, aux[:nrVec])
 
-	outMainThread.info.EIP = uintptr(elfHdr.Entry)
-	outMainThread.info.ESP = uint32(defaultStackStart) - PAGE_SIZE
+	outMainThread.Info.EIP = uintptr(elfHdr.Entry)
+	outMainThread.Info.ESP = uint32(defaultStackStart) - PAGE_SIZE
 	return ESUCCESS
 }
 

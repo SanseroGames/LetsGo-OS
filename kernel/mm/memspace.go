@@ -256,3 +256,76 @@ func IterateUserSpaceType[T any](startAt uintptr, memSpace *MemSpace) iter.Seq2[
 
 	}
 }
+
+func NewUserSpaceSplice[T any](memSpace *MemSpace, startAddr uintptr, len int) UserSpaceSlice[T] {
+	return UserSpaceSlice[T]{
+		memSpace:  memSpace,
+		startAddr: startAddr,
+		len:       len,
+	}
+}
+
+type UserSpaceSlice[T any] struct {
+	memSpace  *MemSpace
+	startAddr uintptr
+	len       int
+}
+
+func (s *UserSpaceSlice[T]) At(index int) (T, syscall.Errno) {
+	var size T
+	var buf [100]byte
+	if index < 0 || index >= s.len {
+		// TODO: Return error instead?
+		log.KErrorLn("Index out of range: ", index, " ", s.len)
+		panic.KernelPanic("UserSpaceSlice: Index out of range")
+	}
+	valueSize := unsafe.Sizeof(size)
+	if valueSize > uintptr(len(buf)) {
+		panic.KernelPanic("UserSlice: Used too big data structure to read from userspace (bigger as buf)")
+	}
+
+	s.memSpace.ReadBytesFromUserSpace(s.startAddr+uintptr(index*int(valueSize)), buf[:valueSize])
+	// count := 0
+	// for value, err := range s.memSpace.IterateUserSpace(s.startAddr + uintptr(index*int(valueSize))) {
+	// 	if count >= int(valueSize) {
+	// 		break
+	// 	}
+	// 	if err != 0 {
+	// 		return size, err
+	// 	}
+	// 	buf[count] = value
+	// 	count++
+	// }
+
+	// for v := range buf {
+	// 	log.KDebug(v)
+	// }
+	// log.KDebugLn("")
+
+	result := *(*T)(unsafe.Pointer(&buf))
+
+	return result, 0
+
+}
+
+func (s *UserSpaceSlice[T]) Iterate() iter.Seq2[T, syscall.Errno] {
+	return func(yield func(T, syscall.Errno) bool) {
+		for i := 0; i < s.len; i++ {
+			value, err := s.At(i)
+			if !yield(value, err) || err != 0 {
+				return
+			}
+		}
+	}
+}
+
+// func (s *UserSpaceIterator[T]) Iterate() iter.Seq2[T, syscall.Errno] {
+// 	return func(yield func(T, syscall.Errno) bool) {
+// 		for i := 0; i < s.len; i++ {
+// 			value, err := s.At(i)
+// 			if !yield(value, err) || err != 0 {
+// 				return
+// 			}
+// 		}
+// 	}
+// }

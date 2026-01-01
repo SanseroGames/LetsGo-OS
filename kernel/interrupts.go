@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/sanserogames/letsgo-os/kernel/log"
+	"github.com/sanserogames/letsgo-os/kernel/mm"
 )
 
 type IdtEntry struct {
@@ -113,7 +114,7 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 	setGS(KGS_SELECTOR)
 	setDS(KDS_SELECTOR)
 
-	switchPageDir(kernelMemSpace.PageDirectory)
+	mm.SwitchPageDir(mm.KernelMemSpace.PageDirectory)
 	SetInterruptStack(scheduleThread.kernelStack.hi)
 
 	//printRegisters(defaultLogWriter, &info, &regs)
@@ -144,7 +145,7 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 			log.KPrintLn(" TSS ESP0: ", tss.esp0)
 			kernelPanic("Fix pls")
 		}
-		CurrentThread.info = info
+		CurrentThread.Info = info
 		CurrentThread.Regs = regs
 		CurrentThread.IsKernelInterrupt = false
 	}
@@ -189,11 +190,11 @@ func do_isr(regs RegisterState, info InterruptInfo) {
 		CurrentThread.IsKernelInterrupt = false
 		interrupt_debug("Kernel return")
 	} else {
-		info = CurrentThread.info
+		info = CurrentThread.Info
 		regs = CurrentThread.Regs
 		CurrentThread.IsKernelInterrupt = false
 		SetInterruptStack(CurrentThread.kernelStack.hi)
-		switchPageDir(CurrentThread.Domain.MemorySpace.PageDirectory)
+		mm.SwitchPageDir(CurrentThread.Domain.MemorySpace.PageDirectory)
 		interrupt_debug("User return")
 	}
 	interrupt_debug("[INTERRUPT-OUT] Returning to ", info.EIP, " with stack ", uintptr(info.ESP))
@@ -213,8 +214,8 @@ func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8
 
 func defaultHandler() {
 	log.KErrorLn("\nUnhandled interrupt! Disabling Interrupt and halting!")
-	log.KPrintLn("Interrupt number: ", CurrentThread.info.InterruptNumber)
-	log.KPrintLn("Exception code: ", uintptr(CurrentThread.info.ExceptionCode))
+	log.KPrintLn("Interrupt number: ", CurrentThread.Info.InterruptNumber)
+	log.KPrintLn("Exception code: ", uintptr(CurrentThread.Info.ExceptionCode))
 	kernelPanic("fix pls")
 }
 

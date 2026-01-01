@@ -71,9 +71,6 @@ func cleanUpDomain(d *Domain) {
 	d.MemorySpace.FreeAllPages()
 
 	// Clean up kernel resources
-	if ENABLE_DEBUG {
-		log.KDebugLn("Allocated pages ", mm.AllocatedPages, " (out of", maxPages, ")")
-	}
 	Schedule()
 	mm.FreePage(unsafe.Pointer(d))
 }

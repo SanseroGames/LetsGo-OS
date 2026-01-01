@@ -8,7 +8,7 @@ import (
 // and pushers it on the stack and then calls do_kernelPanic
 func kernelPanic(msg string)
 
-//go:nosplit
+// //go:nosplit
 func do_kernelPanic(caller uintptr, msg string) {
 	log.KErrorLn("\n", msg, " - kernel panic :(")
 	log.KPrint("Called from function: ")
@@ -23,6 +23,7 @@ func do_kernelPanic(caller uintptr, msg string) {
 	// does not return
 }
 
+// //go:nosplit
 func panicHelper(thread *Thread) {
 	log.KPrintLn("Domain ID: ", thread.Domain.Pid, ", Thread ID: ", thread.Tid)
 	log.KPrintLn("Program name: ", thread.Domain.ProgramName)
@@ -30,19 +31,20 @@ func panicHelper(thread *Thread) {
 		log.KPrint("In kernel function: ")
 		printFuncName(thread.kernelInfo.EIP)
 	} else {
-		log.KPrintLn("In user function: ", thread.info.EIP)
+		log.KPrintLn("In user function: ", thread.Info.EIP)
 	}
 	printThreadRegisters(thread)
 	DisableInterrupts()
 	Hlt()
 }
 
+// //go:nosplit
 func printThreadRegisters(t *Thread) {
 	log.KPrint("User regs:          Kernel regs:\n")
 	f := runtimeFindFunc(uintptr(t.kernelInfo.EIP))
-	log.KPrint("EIP: ", t.info.EIP, "      ", "EIP: ", t.kernelInfo.EIP, " ", f._Func().Name(), "\n")
+	log.KPrint("EIP: ", t.Info.EIP, "      ", "EIP: ", t.kernelInfo.EIP, " ", f._Func().Name(), "\n")
 	//rintRegisterLineInfo("EIP: ", t.info.EIP, t.kernelInfo.EIP, f._Func().Name())
-	printRegisterLine(20, "ESP: ", t.info.ESP, t.kernelInfo.ESP)
+	printRegisterLine(20, "ESP: ", t.Info.ESP, t.kernelInfo.ESP)
 	printRegisterLine(20, "EBP: ", t.Regs.EBP, t.KernelRegs.EBP)
 	printRegisterLine(20, "EAX: ", t.Regs.EAX, t.KernelRegs.EAX)
 	printRegisterLine(20, "EBX: ", t.Regs.EBX, t.KernelRegs.EBX)
@@ -50,12 +52,13 @@ func printThreadRegisters(t *Thread) {
 	printRegisterLine(20, "EDX: ", t.Regs.EDX, t.KernelRegs.EDX)
 	printRegisterLine(20, "ESI: ", t.Regs.ESI, t.KernelRegs.ESI)
 	printRegisterLine(20, "EDI: ", t.Regs.EDI, t.KernelRegs.EDI)
-	printRegisterLine(20, "EFLAGS: ", t.info.EFLAGS, t.kernelInfo.EFLAGS)
-	printRegisterLine(20, "Exception: ", t.info.ExceptionCode, t.kernelInfo.ExceptionCode)
-	printRegisterLine(20, "Interrupt: ", t.info.InterruptNumber, t.kernelInfo.InterruptNumber)
+	printRegisterLine(20, "EFLAGS: ", t.Info.EFLAGS, t.kernelInfo.EFLAGS)
+	printRegisterLine(20, "Exception: ", t.Info.ExceptionCode, t.kernelInfo.ExceptionCode)
+	printRegisterLine(20, "Interrupt: ", t.Info.InterruptNumber, t.kernelInfo.InterruptNumber)
 	printRegisterLine(20, "Krn ESP: ", t.Regs.KernelESP, t.KernelRegs.KernelESP)
 }
 
+// //go:nosplit
 func printRegisterLine(tabLength int, label string, userReg, kernelReg uint32) {
 	firstLength := len(label)
 	log.KPrint(label, uintptr(userReg))

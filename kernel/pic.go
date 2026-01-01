@@ -27,7 +27,7 @@ const (
 var picHandlers [16]func()
 
 func PICInterruptHandler() {
-	info := &CurrentThread.info
+	info := &CurrentThread.Info
 	if CurrentThread.IsKernelInterrupt {
 		info = &CurrentThread.kernelInfo
 	}
