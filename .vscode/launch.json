@@ -11,9 +11,9 @@
       "gdbpath": "gdb",
       "autorun": [
         "add-auto-load-safe-path ${workspaceRoot}",
-        "add-auto-load-safe-path /usr/lib/go-1.25/src/runtime/runtime-gdb.py",
+        "add-auto-load-safe-path /usr/lib/go/src/runtime/runtime-gdb.py",
         "set arch i386:intel",
-        "source /usr/lib/go-1.25/src/runtime/runtime-gdb.py"
+        "source /usr/lib/go/src/runtime/runtime-gdb.py"
       ]
     }
   ]
