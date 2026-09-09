@@ -344,9 +344,9 @@ func startProgramInternal(module *multiboot.MultibootModule, argv uintptr, envp 
 }
 
 func InitUserMode(kernelStackStart uintptr, kernelStackEnd uintptr) { // Add usermode code segment
-	userModeCS := AddSegment(userModeBase, userModeLimit, PRIV_USER|SEG_EXEC|SEG_R|SEG_NORMAL, SEG_GRAN_4K_PAGE)
+	userModeCS := AddSegment(userModeBase, userModeLimit, SEG_PRIV_USER|SEG_EXEC|SEG_R|SEG_NORMAL, SEG_GRAN_4K_PAGE)
 	// Add usermode data segment
-	userModeDS := AddSegment(userModeBase, userModeLimit, PRIV_USER|SEG_NOEXEC|SEG_W|SEG_NORMAL, SEG_GRAN_4K_PAGE)
+	userModeDS := AddSegment(userModeBase, userModeLimit, SEG_PRIV_USER|SEG_NOEXEC|SEG_W|SEG_NORMAL, SEG_GRAN_4K_PAGE)
 
 	defaultUserSegments.cs = uint32(userModeCS * 8)
 	defaultUserSegments.ss = uint32(userModeDS * 8)
@@ -355,7 +355,7 @@ func InitUserMode(kernelStackStart uintptr, kernelStackEnd uintptr) { // Add use
 	defaultUserSegments.fs = 0
 	defaultUserSegments.gs = 0
 
-	tssIndex := AddSegment(uintptr(unsafe.Pointer(&tss)), unsafe.Sizeof(tss), PRIV_KERNEL|SEG_NORW|TSS_32MODE|SEG_SYSTEM|TSS_IS_TSS, SEG_GRAN_BYTE)
+	tssIndex := AddSegment(uintptr(unsafe.Pointer(&tss)), unsafe.Sizeof(tss), SEG_PRIV_KERNEL|SEG_NORW|TSS_32MODE|SEG_SYSTEM|TSS_IS_TSS, SEG_GRAN_BYTE)
 
 	tss.ss0 = KDS_SELECTOR
 	tss.esp0 = uint32(kernelStackStart)

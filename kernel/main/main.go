@@ -85,7 +85,7 @@ func kmain(info *multiboot.MultibootInfo, stackstart uintptr, stackend uintptr) 
 	log.KDebugLn("InitSerialDeviceInterrupt complete")
 	kernel.InitMultiboot(info)
 	log.KDebugLn("InitMultiboot complete")
-	kernel.SetInterruptHandler(0xE, pageFaultWrapper, kernel.KCS_SELECTOR, kernel.PRIV_USER)
+	kernel.SetInterruptHandler(0xE, pageFaultWrapper, kernel.KCS_SELECTOR, kernel.SEG_PRIV_USER)
 	log.KDebugLn("SetInterruptHandler complete")
 
 	//printMemMaps()

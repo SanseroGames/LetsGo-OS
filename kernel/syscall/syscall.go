@@ -197,7 +197,7 @@ func RegisterSyscall(number int, name string, handler syscallHandler) {
 }
 
 func InitSyscall() {
-	kernel.SetInterruptHandler(0x80, linuxSyscallHandler, kernel.KCS_SELECTOR, kernel.PRIV_USER)
+	kernel.SetInterruptHandler(0x80, linuxSyscallHandler, kernel.KCS_SELECTOR, kernel.SEG_PRIV_USER)
 
 	// Somehow this does not work when written in the variables above
 	syscallList = syscallListRaw[:0]

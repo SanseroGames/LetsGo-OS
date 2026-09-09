@@ -75,11 +75,10 @@ go.o:
 	@# build/go.o is a elf32 object file but all Go symbols are unexported. Our
 	@# asm entrypoint code needs to know the address to 'main.main' and 'runtime.g0'
 	@# so we use objcopy to globalize them
-	@GOARCH=$(GOARCH) GOOS=$(GOOS) go build -o $(BUILD_DIR)/go.o -ldflags='-buildmode=c-archive' github.com/sanserogames/letsgo-os/kernel/main
-	@echo "[objcopy] globalizing symbols {runtime.g0, main.main} in go.o"
+	@GOARCH=$(GOARCH) GOOS=$(GOOS) go build -o $(BUILD_DIR)/go.o -ldflags='-buildmode=c-archive -E _rt0_entry -checklinkname=0' github.com/sanserogames/letsgo-os/kernel/main
+	@echo "[objcopy] globalizing symbols {_rt0_entry} in go.o"
 	@objcopy \
-                --globalize-symbol runtime.g0 \
-                --globalize-symbol main.main \
+                --globalize-symbol _rt0_entry \
                 $(BUILD_DIR)/go.o $(BUILD_DIR)/go.o
 
 $(BUILD_DIR)/arch/$(ARCH)/asm/%.o: arch/$(ARCH)/asm/%.s
@@ -127,10 +126,11 @@ gdb: iso disk
 	sleep 1
 	echo $(GOROOT)
 	gdb \
-	    -ex 'add-auto-load-safe-path $(pwd)' \
+	    -ex 'add-auto-load-safe-path $(PWD)' \
+		-ex 'add-auto-load-safe-path $(GOROOT)/src/runtime/runtime-gdb.py' \
 		-ex 'set arch i386:intel' \
 	    -ex 'file $(kernel_target)' \
 	    -ex 'target remote localhost:1234' \
 	    -ex 'set arch i386:intel' \
-		-ex 'source $(GOROOT)/src/runtime/runtime-gdb.py' \
+		-ex 'source $(GOROOT)/src/runtime/runtime-gdb.py'
 	@killall qemu-system-i386 || true

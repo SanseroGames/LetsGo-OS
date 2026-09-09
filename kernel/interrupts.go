@@ -208,7 +208,7 @@ func printTid(t *Thread) {
 func SetInterruptHandler(irq uint8, f InterruptHandler, selector int, priv uint8) {
 	handlers[irq] = f
 	idtTable[irq].selector = uint16(selector)
-	idtTable[irq].flags = uint16(priv|0xE|PRESENT) << 8
+	idtTable[irq].flags = uint16(priv|0xE|SEG_PRESENT) << 8
 
 }
 
@@ -232,7 +232,7 @@ func InitInterrupts() {
 		high := uint16(uint32(isrAddr) >> 16)
 		idtTableSlice[i].offsetLow = low
 		idtTableSlice[i].offsetHigh = high
-		SetInterruptHandler(uint8(i), defaultHandler, KCS_SELECTOR, PRIV_KERNEL)
+		SetInterruptHandler(uint8(i), defaultHandler, KCS_SELECTOR, SEG_PRIV_KERNEL)
 	}
 	idtDescriptor.IdtSize = uint16(uintptr(len(idtTableSlice))*unsafe.Sizeof(idtTableSlice[0])) - 1
 	idtAddr := uint32(uintptr(unsafe.Pointer(&idtTable)))
@@ -240,7 +240,7 @@ func InitInterrupts() {
 	idtDescriptor.IdtAddressHigh = uint16(idtAddr >> 16)
 	installIDT(&idtDescriptor)
 
-	SetInterruptHandler(0xd, gpfPanic, KCS_SELECTOR, PRIV_USER)
+	SetInterruptHandler(0xd, gpfPanic, KCS_SELECTOR, SEG_PRIV_USER)
 }
 
 func gpfPanic() {

@@ -8,35 +8,35 @@ import (
 )
 
 type GdtEntry struct {
-	limitLow          uint16
-	baseLow           uint16
-	baseMid           uint8
-	access            uint8
-	limitHighAndFlags uint8
-	baseHigh          uint8
+	LimitLow          uint16
+	BaseLow           uint16
+	BaseMid           uint8
+	Access            uint8
+	LimitHighAndFlags uint8
+	BaseHigh          uint8
 }
 
 func (e *GdtEntry) IsPresent() bool {
-	return e.access&PRESENT != 0
+	return e.Access&SEG_PRESENT != 0
 }
 
 func (e *GdtEntry) Fill(base uint32, limit uint32, access uint8, flags uint8) {
-	e.limitHighAndFlags = uint8((limit >> 16) & 0x000F)
-	e.limitHighAndFlags |= flags
-	e.access = access
-	e.baseMid = uint8(base >> 16)
-	e.baseHigh = uint8(base >> 24)
-	e.baseLow = uint16(base & 0xFFFF)
-	e.limitLow = uint16(limit & 0x0000FFFF)
+	e.LimitHighAndFlags = uint8((limit >> 16) & 0x000F)
+	e.LimitHighAndFlags |= flags
+	e.Access = access
+	e.BaseMid = uint8(base >> 16)
+	e.BaseHigh = uint8(base >> 24)
+	e.BaseLow = uint16(base & 0xFFFF)
+	e.LimitLow = uint16(limit & 0x0000FFFF)
 }
 
 func (e *GdtEntry) Clear() {
-	e.limitHighAndFlags = 0
-	e.access = 0
-	e.baseMid = 0
-	e.baseHigh = 0
-	e.baseLow = 0
-	e.limitLow = 0
+	e.LimitHighAndFlags = 0
+	e.Access = 0
+	e.BaseMid = 0
+	e.BaseHigh = 0
+	e.BaseLow = 0
+	e.LimitLow = 0
 
 }
 
@@ -48,7 +48,7 @@ type GdtSegment struct {
 }
 
 func (s *GdtSegment) IsPresent() bool {
-	return s.access&PRESENT != 0
+	return s.access&SEG_PRESENT != 0
 }
 
 func (s *GdtSegment) Clear() {
@@ -59,7 +59,8 @@ func (s *GdtSegment) Clear() {
 }
 
 type GdtDescriptor struct {
-	GdtSize        uint16
+	GdtSize uint16
+	// Using separate uint16 for the address as otherwise go would add padding to align the entry
 	GdtAddressLow  uint16
 	GdtAddressHigh uint16
 }
@@ -94,18 +95,18 @@ const (
 	SEG_R    = 1 << 1
 	SEG_W    = 1 << 1
 
-	SEG_SYSTEM = 0 << 4
-	SEG_NORMAL = 1 << 4
-
 	SEG_NOEXEC = 0 << 3
 	SEG_EXEC   = 1 << 3
 
-	PRIV_KERNEL = 0 << 5
-	PRIV_USER   = 3 << 5
+	SEG_SYSTEM = 0 << 4
+	SEG_NORMAL = 1 << 4
+
+	SEG_PRIV_KERNEL = 0 << 5
+	SEG_PRIV_USER   = 3 << 5
 
 	SEG_BIG_MODE = 1 << 6
 
-	PRESENT = 1 << 7
+	SEG_PRESENT = 1 << 7
 
 	// userDesc flags
 	UDESC_32SEG           = 1 << 0 // I ignore this
@@ -156,13 +157,13 @@ func GetSegment(index int, res *GdtSegment) int {
 	if index < 0 || index > len(gdtTable) {
 		return -1
 	}
-	res.limit = uintptr(gdtTable[index].limitLow)
-	res.limit += uintptr((gdtTable[index].limitHighAndFlags & 0xF)) << 16
-	res.base = uintptr(gdtTable[index].baseLow)
-	res.base += uintptr(gdtTable[index].baseMid) << 16
-	res.base += uintptr(gdtTable[index].baseHigh) << 24
-	res.access = gdtTable[index].access
-	res.flags = gdtTable[index].limitHighAndFlags & 0xF0
+	res.limit = uintptr(gdtTable[index].LimitLow)
+	res.limit += uintptr((gdtTable[index].LimitHighAndFlags & 0xF)) << 16
+	res.base = uintptr(gdtTable[index].BaseLow)
+	res.base += uintptr(gdtTable[index].BaseMid) << 16
+	res.base += uintptr(gdtTable[index].BaseHigh) << 24
+	res.access = gdtTable[index].Access
+	res.flags = gdtTable[index].LimitHighAndFlags & 0xF0
 	return 0
 
 }
@@ -186,19 +187,19 @@ func UpdateSegment(index int, base uintptr, limit uintptr, access uint8, flags u
 
 // Does not check if index in range
 func doUpdateSegment(index int, base uintptr, limit uintptr, access uint8, flags uint8) {
-	gdtTable[index].limitHighAndFlags = uint8((limit >> 16) & 0x000F)
+	gdtTable[index].LimitHighAndFlags = uint8((limit >> 16) & 0x000F)
 	bigMode := uint8(0)
 
 	if access&SEG_NORMAL != 0 {
 		bigMode = 1 << 6
 	}
-	gdtTable[index].limitHighAndFlags |= flags | bigMode
-	gdtTable[index].access = access | PRESENT
-	gdtTable[index].baseMid = uint8(base >> 16)
-	gdtTable[index].baseHigh = uint8(base >> 24)
+	gdtTable[index].LimitHighAndFlags |= flags | bigMode
+	gdtTable[index].Access = access | SEG_PRESENT
+	gdtTable[index].BaseMid = uint8(base >> 16)
+	gdtTable[index].BaseHigh = uint8(base >> 24)
 
-	gdtTable[index].baseLow = uint16(base & 0xFFFF)
-	gdtTable[index].limitLow = uint16(limit & 0x0000FFFF)
+	gdtTable[index].BaseLow = uint16(base & 0xFFFF)
+	gdtTable[index].LimitLow = uint16(limit & 0x0000FFFF)
 
 }
 
@@ -218,7 +219,7 @@ func SetTlsSegment(index uint32, desc *UserDesc) bool {
 	if desc.Flags&UDESC_LIMIT_IN_PAGES != 0 {
 		flags = SEG_GRAN_4K_PAGE
 	}
-	access := uint8(PRIV_USER | SEG_NORMAL | PRESENT)
+	access := uint8(SEG_PRIV_USER | SEG_NORMAL | SEG_PRESENT)
 	if desc.Flags&UDESC_RX_ONLY != 0 {
 		access |= SEG_EXEC
 	} else {
@@ -251,6 +252,6 @@ func FlushTlsTable(table []GdtEntry) {
 
 func printGdt(gdt []GdtEntry) {
 	for _, n := range gdt {
-		log.KDebugLn(n.limitLow, " ", n.baseLow, " ", n.baseMid, " ", n.access, " ", n.limitHighAndFlags, " ", n.baseHigh)
+		log.KDebugLn(n.LimitLow, " ", n.BaseLow, " ", n.BaseMid, " ", n.Access, " ", n.LimitHighAndFlags, " ", n.BaseHigh)
 	}
 }
