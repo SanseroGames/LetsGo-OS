@@ -263,6 +263,7 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_FSTATAT64, "fstatat64 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_GETCWD, "fstatat64 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_IOCTL, "ioctl syscall", invalHandler)
+	RegisterSyscall(0x1a6, "futex_time64 syscall", okHandler)
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {
