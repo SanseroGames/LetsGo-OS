@@ -201,6 +201,50 @@ func (m *MemSpace) ReadBytesFromUserSpace(startAddr uintptr, buffer []byte) sysc
 	return 0
 }
 
+func (m *MemSpace) WriteBytesToUserSpace(startAddr uintptr, buffer []byte) syscall.Errno {
+
+	count := 0
+	for value, err := range m.IterateUserSpaceByReference(startAddr) {
+		if count >= len(buffer) {
+			break
+		}
+		if err != 0 {
+			return err
+		}
+		*value = buffer[count]
+		count++
+	}
+	return 0
+}
+
+func (m *MemSpace) IterateUserSpaceByReference(startAt uintptr) iter.Seq2[*byte, syscall.Errno] {
+	return func(yield func(*byte, syscall.Errno) bool) {
+		if !m.IsAddressAccessible(startAt) {
+			yield(nil, syscall.EFAULT)
+			return
+		}
+
+		startOffset := (startAt & (PAGE_SIZE - 1))
+
+		for currentPage := startAt & (^uintptr(0) ^ (PAGE_SIZE - 1)); currentPage != 0; currentPage += PAGE_SIZE {
+			physicalPage, accessible := m.GetPhysicalAddress(currentPage)
+			if !(accessible) {
+				yield(nil, syscall.EFAULT)
+				return
+			}
+			for currentOffset := startOffset; currentOffset < PAGE_SIZE; currentOffset++ {
+				value := (*byte)(unsafe.Pointer(physicalPage | currentOffset))
+				if !yield(value, 0) {
+					return
+				}
+			}
+			startOffset = 0
+		}
+
+		yield(nil, syscall.EFAULT)
+	}
+}
+
 func (m *MemSpace) IterateUserSpace(startAt uintptr) iter.Seq2[byte, syscall.Errno] {
 	return func(yield func(byte, syscall.Errno) bool) {
 		if !m.IsAddressAccessible(startAt) {
@@ -257,6 +301,18 @@ func IterateUserSpaceType[T any](startAt uintptr, memSpace *MemSpace) iter.Seq2[
 	}
 }
 
+func WriteTypeToUserSpace[T any](value *T, startAt uintptr, memSpace *MemSpace) syscall.Errno {
+	valueBytePtr := (*byte)(unsafe.Pointer(value))
+	valueByteSlice := unsafe.Slice(valueBytePtr, unsafe.Sizeof(*value))
+	return memSpace.WriteBytesToUserSpace(startAt, valueByteSlice)
+}
+
+func GetTypeFromUserSpace[T any](target *T, startAt uintptr, memSpace *MemSpace) syscall.Errno {
+	valueBytePtr := (*byte)(unsafe.Pointer(target))
+	valueByteSlice := unsafe.Slice(valueBytePtr, unsafe.Sizeof(*target))
+	return memSpace.ReadBytesFromUserSpace(startAt, valueByteSlice)
+}
+
 func NewUserSpaceSplice[T any](memSpace *MemSpace, startAddr uintptr, len int) UserSpaceSlice[T] {
 	return UserSpaceSlice[T]{
 		memSpace:  memSpace,
@@ -281,7 +337,7 @@ func (s *UserSpaceSlice[T]) At(index int) (T, syscall.Errno) {
 	}
 	valueSize := unsafe.Sizeof(size)
 	if valueSize > uintptr(len(buf)) {
-		panic.KernelPanic("UserSlice: Used too big data structure to read from userspace (bigger as buf)")
+		panic.KernelPanic("UserSlice: Used too big data structure to read from userspace (bigger as buf [100]byte)")
 	}
 
 	s.memSpace.ReadBytesFromUserSpace(s.startAddr+uintptr(index*int(valueSize)), buf[:valueSize])

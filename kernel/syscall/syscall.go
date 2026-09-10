@@ -461,13 +461,8 @@ func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	//flags := args.arg3
 	//mask := args.arg4
 	buf := args.arg5
-	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
-	if !ok {
-		log.KErrorLn("invalid adress in statx")
-		return 0, syscall.EFAULT
-	}
-	item := (*statxData)(unsafe.Pointer(addr))
-	mm.Memclr(addr, int(unsafe.Sizeof(item)))
+
+	item := statxData{}
 	// Trying to replicate linux behavior
 	item.stx_mask = STATX_BASIC_STATS
 	item.stx_blksize = 1024
@@ -484,19 +479,17 @@ func linuxStatxSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	item.stx_gid = 0
 	item.stx_attributes_mask = 0x0000000000203000
 	item.stx_attributes = 0
-	return 0, ESUCCESS
+
+	err := mm.WriteTypeToUserSpace(&item, uintptr(buf), &kernel.CurrentThread.Domain.MemorySpace)
+	return 0, err
 }
 
 func linuxUnameSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	buf := args.arg1
-	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
-	if !ok {
-		log.KErrorLn("invalid adress in uname")
-		return 0, syscall.EFAULT
-	}
-	provided := (*utsname)(unsafe.Pointer(addr))
-	*provided = uts
-	return 0, ESUCCESS
+
+	err := mm.WriteTypeToUserSpace(&uts, uintptr(buf), &kernel.CurrentThread.Domain.MemorySpace)
+
+	return 0, err
 }
 
 func linuxCloneSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -521,15 +514,18 @@ func linuxMincoreSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	//addr := args.arg1
 	length := args.arg2
 	vec := args.arg3
-	vecAddr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(vec))
-	if !ok {
-		log.KErrorLn("Could not look up vec array")
-		return 0, syscall.EFAULT
-	}
 
-	arr := (*[30 << 1]byte)(unsafe.Pointer(vecAddr))[:(length+kernel.PAGE_SIZE-1)/kernel.PAGE_SIZE]
-	for i := range arr {
-		arr[i] = 1
+	remaining := uint32((length + kernel.PAGE_SIZE - 1) / kernel.PAGE_SIZE)
+	for v, err := range kernel.CurrentThread.Domain.MemorySpace.IterateUserSpaceByReference(uintptr(vec)) {
+		if err != 0 {
+			return 0, err
+		}
+		if remaining == 0 {
+			break
+		}
+
+		*v = 1
+		remaining--
 	}
 	return 0, ESUCCESS
 }
@@ -625,13 +621,14 @@ func linuxMmap2Syscall(args syscallArgs) (uint32, syscall.Errno) {
 }
 
 func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	u_info := args.arg1
-	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(u_info))
-	if !ok {
-		log.KErrorLn("Could not look up user desc")
-		return 0, syscall.EFAULT
+	u_info := uintptr(args.arg1)
+
+	desc := kernel.UserDesc{}
+	err := mm.GetTypeFromUserSpace(&desc, u_info, &kernel.CurrentThread.Domain.MemorySpace)
+	if err != 0 {
+		return 0, err
 	}
-	desc := (*kernel.UserDesc)(unsafe.Pointer(addr))
+
 	if desc.Flags&kernel.UDESC_SEG_NOT_PRESENT != 0 {
 		log.KErrorLn("fixme: not handling updating entries")
 		return 0, syscall.ENOSYS
@@ -646,7 +643,10 @@ func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		}
 		desc.EntryNumber = slot
 	}
-	kernel.SetTlsSegment(slot, desc)
+
+	mm.WriteTypeToUserSpace(&desc, u_info, &kernel.CurrentThread.Domain.MemorySpace)
+
+	kernel.SetTlsSegment(slot, &desc)
 
 	return 0, ESUCCESS
 }
@@ -776,14 +776,11 @@ func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	fd := args.arg1
 	buf := args.arg2
 	count := args.arg3
-	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(buf))
-	if !ok {
-		log.KErrorLn("Could not look up read addr")
-		return 0, syscall.EFAULT
-	}
-	arr := (*[1 << 30]byte)(unsafe.Pointer(addr))[:count]
 
 	var num uint32 = 0
+
+	var charBuf [1]byte
+	char := charBuf[:]
 
 	if fd == 0 {
 		for num == 0 {
@@ -792,8 +789,9 @@ func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
 			}
 
 			for kernel.SerialDevice.HasReceivedData() && num < count {
-				char := kernel.SerialDevice.Read()
-				arr[num] = char
+				char[0] = kernel.SerialDevice.Read()
+				// arr[num] = char
+				kernel.CurrentThread.Domain.MemorySpace.WriteBytesToUserSpace(uintptr(buf), char)
 				num++
 			}
 		}
