@@ -18,6 +18,8 @@ type Domain struct {
 	blockedThreads threadList
 
 	ProgramName string
+
+	DebugPrintSyscalls bool
 }
 
 func (d *Domain) AddThread(t *Thread) {

@@ -13,6 +13,10 @@ import (
 
 const PRINT_SYSCALL = kernel.ENABLE_DEBUG
 
+// spams output and are not interesting currently. Go for example spams a lot of syscalls due to multithreading
+// which i have not yet properly implemented
+var filteredSyscalls = [...]int{0x1a6, 0x109, 0xa2}
+
 type ioVec struct {
 	iovBase uintptr /* Starting address */
 	iovLen  uint32  /* Number of bytes to transfer */
@@ -309,7 +313,12 @@ func linuxSyscallHandler() {
 		return
 	}
 	handler := syscallList[handlerIdx-1]
-	if PRINT_SYSCALL {
+	if PRINT_SYSCALL || kernel.CurrentDomain.DebugPrintSyscalls {
+		filtered := false
+		for _, filteredSyscall := range filteredSyscalls {
+			filtered = filtered || filteredSyscall == int(syscallNr)
+		}
+		if !filtered {
 		log.KDebugLn("pid: ",
 			kernel.CurrentThread.Domain.Pid,
 			" tid: ",
@@ -322,7 +331,7 @@ func linuxSyscallHandler() {
 			uintptr(syscallNr),
 			")",
 			")")
-		log.KDebugLn(" |- arg1:",
+			log.KDebugLn("  |- arg1:",
 			uintptr(args.arg1),
 			", arg2:",
 			uintptr(args.arg2),
@@ -335,9 +344,15 @@ func linuxSyscallHandler() {
 			", arg6:",
 			uintptr(args.arg6),
 		)
+		}
 	}
 	ret, err = handler.handler(args)
-	if PRINT_SYSCALL {
+	if PRINT_SYSCALL || kernel.CurrentDomain.DebugPrintSyscalls {
+		filtered := false
+		for _, filteredSyscall := range filteredSyscalls {
+			filtered = filtered || filteredSyscall == int(syscallNr)
+		}
+		if !filtered {
 		log.KDebugLn("SYSCALL RETURN pid: ",
 			kernel.CurrentThread.Domain.Pid,
 			" tid: ",
@@ -348,6 +363,7 @@ func linuxSyscallHandler() {
 			uint32(err),
 			")",
 		)
+		}
 	}
 	if err != ESUCCESS {
 		ret = ^uint32(err) + 1
@@ -359,6 +375,7 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	pathname := args.arg1
 	argv := args.arg2
 	envp := args.arg3
+	debugFlag := args.arg4 // totally non-stanaard, will be changed in the future
 
 	// Create new domain
 	newDomainMem := mm.AllocPage()
@@ -375,6 +392,7 @@ func linuxExecveSyscall(args syscallArgs) (uint32, syscall.Errno) {
 		return 0, err
 	}
 	newDomain.MemorySpace.MapPage(newThreadMem.Address(), newThreadMem.Address(), kernel.PAGE_RW|kernel.PAGE_PERM_KERNEL)
+	newDomain.DebugPrintSyscalls = debugFlag == 1
 	kernel.AddDomain(newDomain)
 
 	// if !kernel.CurrentThread.isFork {
