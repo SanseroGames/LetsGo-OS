@@ -8,7 +8,6 @@ import (
 	"github.com/sanserogames/letsgo-os/kernel/log"
 	"github.com/sanserogames/letsgo-os/kernel/mm"
 	"github.com/sanserogames/letsgo-os/kernel/panic"
-	"github.com/sanserogames/letsgo-os/kernel/utils"
 )
 
 const PRINT_SYSCALL = kernel.ENABLE_DEBUG
@@ -16,11 +15,6 @@ const PRINT_SYSCALL = kernel.ENABLE_DEBUG
 // spams output and are not interesting currently. Go for example spams a lot of syscalls due to multithreading
 // which i have not yet properly implemented
 var filteredSyscalls = [...]int{0x1a6, 0x109, 0xa2}
-
-type ioVec struct {
-	iovBase uintptr /* Starting address */
-	iovLen  uint32  /* Number of bytes to transfer */
-}
 
 const _UTSNAME_LENGTH = 65
 
@@ -268,6 +262,7 @@ func InitSyscall() {
 	RegisterSyscall(syscall.SYS_GETCWD, "fstatat64 syscall", okHandler)
 	RegisterSyscall(syscall.SYS_IOCTL, "ioctl syscall", invalHandler)
 	RegisterSyscall(0x1a6, "futex_time64 syscall", okHandler)
+	RegisterSyscall(syscall.SYS_GETDENTS64, "getdents64 syscall", linuxGetdents64Syscall)
 }
 
 func getTidSyscall(args syscallArgs) (uint32, syscall.Errno) {
@@ -319,31 +314,31 @@ func linuxSyscallHandler() {
 			filtered = filtered || filteredSyscall == int(syscallNr)
 		}
 		if !filtered {
-		log.KDebugLn("pid: ",
-			kernel.CurrentThread.Domain.Pid,
-			" tid: ",
-			kernel.CurrentThread.Tid,
-			" :: ",
-			handler.name,
-			" (",
-			syscallNr,
-			" hex(",
-			uintptr(syscallNr),
-			")",
-			")")
+			log.KDebugLn("pid: ",
+				kernel.CurrentThread.Domain.Pid,
+				" tid: ",
+				kernel.CurrentThread.Tid,
+				" :: ",
+				handler.name,
+				" (",
+				syscallNr,
+				" hex(",
+				uintptr(syscallNr),
+				")",
+				")")
 			log.KDebugLn("  |- arg1:",
-			uintptr(args.arg1),
-			", arg2:",
-			uintptr(args.arg2),
-			", arg3:",
-			uintptr(args.arg3),
-			", arg4:",
-			uintptr(args.arg4),
-			", arg5:",
-			uintptr(args.arg5),
-			", arg6:",
-			uintptr(args.arg6),
-		)
+				uintptr(args.arg1),
+				", arg2:",
+				uintptr(args.arg2),
+				", arg3:",
+				uintptr(args.arg3),
+				", arg4:",
+				uintptr(args.arg4),
+				", arg5:",
+				uintptr(args.arg5),
+				", arg6:",
+				uintptr(args.arg6),
+			)
 		}
 	}
 	ret, err = handler.handler(args)
@@ -353,16 +348,16 @@ func linuxSyscallHandler() {
 			filtered = filtered || filteredSyscall == int(syscallNr)
 		}
 		if !filtered {
-		log.KDebugLn("SYSCALL RETURN pid: ",
-			kernel.CurrentThread.Domain.Pid,
-			" tid: ",
-			kernel.CurrentThread.Tid,
-			" :: ",
-			ret,
-			" (",
-			uint32(err),
-			")",
-		)
+			log.KDebugLn("SYSCALL RETURN pid: ",
+				kernel.CurrentThread.Domain.Pid,
+				" tid: ",
+				kernel.CurrentThread.Tid,
+				" :: ",
+				ret,
+				" (",
+				uint32(err),
+				")",
+			)
 		}
 	}
 	if err != ESUCCESS {
@@ -649,173 +644,6 @@ func linuxSetThreadAreaSyscall(args syscallArgs) (uint32, syscall.Errno) {
 	kernel.SetTlsSegment(slot, &desc)
 
 	return 0, ESUCCESS
-}
-
-func linuxOpenSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	//path := args.arg1
-	flags := args.arg2
-	addr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(flags))
-	if !ok {
-		return 0, syscall.EFAULT
-	}
-	s := utils.CString(addr)
-	if PRINT_SYSCALL {
-		log.KDebugLn("[SYS-OPEN] ", s)
-	}
-	//text_mode_println(s)
-	return 0, syscall.ENOSYS
-	//printRegisters(currentInfo, Regs)
-
-}
-
-func linuxOpenAtSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	fd := args.arg1
-	path := args.arg2
-	flags := args.arg3
-	pathaddr, ok := kernel.CurrentThread.Domain.MemorySpace.GetPhysicalAddress(uintptr(path))
-	if !ok {
-		return 0, syscall.EFAULT
-	}
-	s1 := utils.CString(pathaddr)
-	if PRINT_SYSCALL {
-		log.KDebugLn("[SYS-OPENAT] fd:", fd)
-		log.KDebugLn("[SYS-OPENAT] path:", s1)
-		log.KDebugLn("[SYS-OPENAT] flags:", flags)
-	}
-
-	if s1 == "/dev/null" {
-		return 42, ESUCCESS
-	}
-
-	//text_mode_println(s)
-	return 0, syscall.ENOSYS
-	//printRegisters(currentInfo, Regs)
-
-}
-
-func linuxWriteVSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	fd := args.arg1
-	arr := uintptr(args.arg2)
-	count := args.arg3
-	if fd < 1 || fd > 2 {
-		return 0, syscall.EBADF
-	}
-
-	if count <= 0 {
-		return 0, syscall.EINVAL
-	}
-
-	processed := 0
-	printed := uint32(0)
-	for item, err := range mm.IterateUserSpaceType[ioVec](arr, &kernel.CurrentDomain.MemorySpace) {
-		if err != ESUCCESS {
-			return 0, err
-		}
-		written, err := writeSyscallWriteData(fd, item.iovBase, item.iovLen)
-		if err != ESUCCESS {
-			return 0, err
-		}
-		printed += written
-		processed++
-		if processed == int(count) {
-			break
-		}
-	}
-	return printed, ESUCCESS
-}
-
-func linuxWriteSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	fd := args.arg1
-	text := uintptr(args.arg2)
-	length := args.arg3
-	if PRINT_SYSCALL {
-		log.KDebugLn("FD: ", fd, " text: ", text, " length: ", length)
-	}
-	if fd < 1 || fd > 2 {
-		return 0, syscall.EBADF
-	}
-	return writeSyscallWriteData(fd, text, length)
-}
-
-func writeSyscallWriteData(fd uint32, text uintptr, length uint32) (uint32, syscall.Errno) {
-	var buf [100]byte
-
-	s := unsafe.String(&buf[0], len(buf))
-
-	index := 0
-	writeLen := uint32(0)
-	for value, err := range kernel.CurrentDomain.MemorySpace.IterateUserSpace(text) {
-		if err != ESUCCESS {
-			return 0, err
-		}
-		buf[index] = value
-		index++
-		if index == len(buf) {
-			if fd == 2 {
-				log.KError(s)
-			} else {
-				log.KPrint(s)
-			}
-			index = 0
-		}
-		writeLen++
-		if writeLen == length {
-			break
-		}
-	}
-	rest := unsafe.String(&buf[0], index)
-	if fd == 2 {
-		log.KError(rest)
-	} else {
-		log.KPrint(rest)
-	}
-	return uint32(writeLen), ESUCCESS
-}
-
-func linuxReadSyscall(args syscallArgs) (uint32, syscall.Errno) {
-	fd := args.arg1
-	buf := args.arg2
-	count := args.arg3
-
-	var num uint32 = 0
-
-	var charBuf [1]byte
-	char := charBuf[:]
-
-	if fd == 0 {
-		for num == 0 {
-			for !kernel.SerialDevice.HasReceivedData() {
-				kernel.Yield()
-			}
-
-			for kernel.SerialDevice.HasReceivedData() && num < count {
-				char[0] = kernel.SerialDevice.Read()
-				// arr[num] = char
-				kernel.CurrentThread.Domain.MemorySpace.WriteBytesToUserSpace(uintptr(buf), char)
-				num++
-			}
-		}
-	}
-	// I don't use keyboard anymore, since I have serial.
-	// When I implmentf device drivers, I might add this again
-	// else if fd == 42 {
-	// 	for num == 0 {
-	// 		for buffer.Len() == 0 {
-	// 			kernel.Block()
-	// 		}
-
-	// 		for buffer.Len() > 0 && num < count {
-	// 			raw_key := buffer.Pop().Keycode
-	// 			pressed := raw_key&0x80 == 0
-	// 			key := raw_key & 0x7f
-	// 			if pressed {
-	// 				arr[num] = translateKeycode(key)
-	// 				num++
-	// 			}
-	// 		}
-	// 	}
-	// }
-	return num, ESUCCESS
 }
 
 func linuxFutexSyscall(args syscallArgs) (uint32, syscall.Errno) {

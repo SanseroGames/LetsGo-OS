@@ -20,6 +20,8 @@ type Domain struct {
 	ProgramName string
 
 	DebugPrintSyscalls bool
+
+	TmpReadDirectory bool
 }
 
 func (d *Domain) AddThread(t *Thread) {

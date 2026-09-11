@@ -10,7 +10,8 @@ import (
 var (
 	multibootInfo *multiboot.MultibootInfo
 
-	loadedModules [30]multiboot.MultibootModule
+	LoadedModules      []multiboot.MultibootModule
+	loadedModulesArray [30]multiboot.MultibootModule
 
 	MemoryMaps [6]multiboot.MemoryMap
 )
@@ -20,7 +21,7 @@ func InitMultiboot(info *multiboot.MultibootInfo) {
 
 	mbI := unsafe.Slice((*byte)(unsafe.Add(unsafe.Pointer(info), unsafe.Sizeof(*info))), info.TotalSize-uint32(unsafe.Sizeof(*info)))
 
-	loadedModuleSlice := loadedModules[:]
+	LoadedModules = loadedModulesArray[:]
 
 	foundModules := 0
 	for i := uint32(0); i < info.TotalSize; {
@@ -30,12 +31,12 @@ func InitMultiboot(info *multiboot.MultibootInfo) {
 			break
 		}
 		if mbTag.Type == 3 {
-			if foundModules < len(loadedModuleSlice) {
+			if foundModules < len(LoadedModules) {
 				mbMod := (*multiboot.MultibootModule)(unsafe.Pointer(mbTag))
 
-				loadedModuleSlice[foundModules] = *mbMod
+				LoadedModules[foundModules] = *mbMod
 				log.KDebugLn(mbMod.Cmdline())
-				log.KDebugLn(loadedModuleSlice[foundModules].Cmdline())
+				log.KDebugLn(LoadedModules[foundModules].Cmdline())
 				foundModules++
 			} else {
 				log.KErrorLn("[WARNING] Not enough space to load all modules")

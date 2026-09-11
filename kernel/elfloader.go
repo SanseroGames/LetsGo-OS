@@ -116,10 +116,9 @@ func LoadAuxVector(buf []auxVecEntry, elfHdr *elf.Header32, loadAddr uintptr) in
 }
 
 func FindMultibootModule(multibootModuleName string) (*multiboot.MultibootModule, syscall.Errno) {
-	loadedModuleSlice := loadedModules[:]
-	for idx, loadedModule := range loadedModuleSlice {
+	for idx, loadedModule := range LoadedModules {
 		if loadedModule.Cmdline() == multibootModuleName {
-			return &loadedModuleSlice[idx], ESUCCESS
+			return &LoadedModules[idx], ESUCCESS
 		}
 	}
 	return nil, syscall.ENOENT
